@@ -10,6 +10,8 @@
 #include "sctp_server.h"
 #include "sync.h"
 #include "utils.h"
+#include "RMCMap.h"
+
 
 extern string g_hss_ip_addr;
 extern int g_hss_port;
