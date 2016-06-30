@@ -54,7 +54,7 @@ UNLOCK TABLES;
 DROP TABLE IF EXISTS `loc_info`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `loc_info` (
+` `loc_info` (
   `imsi` bigint(20) DEFAULT NULL,
   `mmeid` bigint(20) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;

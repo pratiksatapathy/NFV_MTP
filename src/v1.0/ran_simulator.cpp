@@ -65,6 +65,7 @@ void simulate(int arg) {
 		// Initial attach
 		ran.initial_attach();
 
+
 		// Authentication
 		ok = ran.authenticate();
 		if (!ok) {

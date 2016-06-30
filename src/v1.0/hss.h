@@ -15,10 +15,22 @@
 
 extern string g_hss_ip_addr;
 extern int g_hss_port;
+class Authinfo {
+public:
+	uint64_t key_id;
+	uint64_t rand_num;
 
+	//Authinfo();
+	template<class Archive>
+    void serialize(Archive &ar, const unsigned int version);
+
+};
 class Hss {
 private:
 	pthread_mutex_t mysql_client_mux;
+	RMCMap<uint64_t,Authinfo> *rc_autn_info;
+	RMCMap<uint64_t,uint32_t> *rc_loc_info;
+
 	
 	void get_autn_info(uint64_t, uint64_t&, uint64_t&);
 	void set_loc_info(uint64_t, uint32_t);
@@ -33,5 +45,6 @@ public:
 	void handle_location_update(int, Packet&);
 	~Hss();
 };
+
 
 #endif //HSS_H

@@ -2,7 +2,7 @@
 
 string g_ran_ip_addr = "10.129.28.20";
 string g_trafmon_ip_addr = "10.129.28.20";
-string g_mme_ip_addr = "10.129.41.30";
+string g_mme_ip_addr = "10.129.26.223";//"10.129.41.30";
 int g_trafmon_port = 4000;
 int g_mme_port = 5000;
 

@@ -1,11 +1,23 @@
 #include "hss.h"
 
 string g_hss_ip_addr = "10.129.28.20";
+string rmc_path = "tcp:host=10.129.28.101,port=11100";
 int g_hss_port = 6000;
 
 Hss::Hss() {
-	g_sync.mux_init(mysql_client_mux);
+	//g_sync.mux_init(mysql_client_mux);
+
+	//ramcloud initialization
+	rc_autn_info = new RMCMap<uint64_t,Authinfo>((char *)rmc_path.c_str(),"rc_autn_info");
+	rc_loc_info = new RMCMap<uint64_t,uint32_t>((char *)rmc_path.c_str(),"rc_loc_info");
+
 }
+//making serializable
+template<class Archive>
+void Authinfo::serialize(Archive &ar, const unsigned int version)
+    {
+        ar & key_id & rand_num;
+    }
 
 void Hss::handle_mysql_conn() {
 	/* Lock not necessary since this is called only once per object. Added for uniformity in locking */
@@ -15,36 +27,18 @@ void Hss::handle_mysql_conn() {
 }
 
 void Hss::get_autn_info(uint64_t imsi, uint64_t &key, uint64_t &rand_num) {
-	MYSQL_RES *query_res;
-	MYSQL_ROW query_res_row;
-	int i;
-	int num_fields;
-	string query;
 
-	query_res = NULL;
-	query = "select key_id, rand_num from autn_info where imsi = " + to_string(imsi);
-	TRACE(cout << "hss_getautninfo:" << query << endl;)
-	g_sync.mlock(mysql_client_mux);
-	mysql_client.handle_query(query, &query_res);
-	g_sync.munlock(mysql_client_mux);
-	num_fields = mysql_num_fields(query_res);
-	TRACE(cout << "hss_getautninfo:" << " fetched" << endl;)
-	query_res_row = mysql_fetch_row(query_res);
-	if (query_res_row == 0) {
-		g_utils.handle_type1_error(-1, "mysql_fetch_row error: hss_getautninfo");
-	}
-	for (i = 0; i < num_fields; i++) {
-		string query_res_field;
+	RMCData<Authinfo> bundle = rc_autn_info->get(imsi);
 
-		query_res_field = query_res_row[i];
-		if (i == 0) {
-			key = stoull(query_res_field);
-		}
-		else {
-			rand_num = stoull(query_res_field);
-		}
+	if(bundle.valid){
+		key = ((Authinfo)(*(bundle.value))).key_id;
+		rand_num = ((Authinfo)(*(bundle.value))).rand_num;
+
+	}else{
+		g_utils.handle_type1_error(-1, "ramcloud error: hss_getautninfo");
+
 	}
-	mysql_free_result(query_res);
+
 }
 
 void Hss::handle_autninfo_req(int conn_fd, Packet &pkt) {
@@ -85,21 +79,14 @@ void Hss::handle_autninfo_req(int conn_fd, Packet &pkt) {
 }
 
 void Hss::set_loc_info(uint64_t imsi, uint32_t mmei) {
-	MYSQL_RES *query_res;
-	string query;
 
-	query_res = NULL;
-	query = "delete from loc_info where imsi = " + to_string(imsi);
-	TRACE(cout << "hss_setlocinfo:" << " " << query << endl;)
-	g_sync.mlock(mysql_client_mux);
-	mysql_client.handle_query(query, &query_res);
-	g_sync.munlock(mysql_client_mux);
-	query = "insert into loc_info values(" + to_string(imsi) + ", " + to_string(mmei) + ")";
-	TRACE(cout << "hss_setlocinfo:" << " " << query << endl;)
-	g_sync.mlock(mysql_client_mux);
-	mysql_client.handle_query(query, &query_res);
-	g_sync.munlock(mysql_client_mux);
-	mysql_free_result(query_res);	
+
+	rc_loc_info->remove(imsi); //need a confirmation
+	TRACE(cout << "hss_setlocinfo:" << " cleared previous entry "<< endl;)
+
+	rc_loc_info->put(imsi,mmei);
+	TRACE(cout << "hss_setlocinfo:" << "imsi:" << imsi<<" mmei:"<<mmei << endl;)
+
 }
 
 void Hss::handle_location_update(int conn_fd, Packet &pkt) {
@@ -118,6 +105,7 @@ void Hss::handle_location_update(int conn_fd, Packet &pkt) {
 	server.snd(conn_fd, pkt);
 	TRACE(cout << "hss_handleautoinforeq:" << " loc update complete sent to mme" << endl;)
 }
+
 
 Hss::~Hss() {
 
