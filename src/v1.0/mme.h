@@ -94,6 +94,10 @@ public:
 
 	UeContext();
 	void init(uint64_t, uint32_t, uint32_t, uint64_t, uint16_t);
+	//for serializability
+	template<class Archive>
+	void serialize(Archive &ar, const unsigned int version);
+
 	~UeContext();
 };
 
@@ -115,8 +119,8 @@ class Mme {
 private:
 	MmeIds mme_ids;
 	uint64_t ue_count;
-	unordered_map<uint32_t, uint64_t> s1mme_id; /* S1_MME UE identification table: mme_s1ap_ue_id -> guti */
-	unordered_map<uint64_t, UeContext> ue_ctx; /* UE context table: guti -> UeContext */
+	//unordered_map<uint32_t, uint64_t> s1mme_id; /* S1_MME UE identification table: mme_s1ap_ue_id -> guti */
+	//unordered_map<uint64_t, UeContext> ue_ctx; /* UE context table: guti -> UeContext */
 
 
 	RMCMap<uint32_t,uint64_t> *r_s1mme_id;
@@ -135,9 +139,7 @@ private:
 	void rem_itfid(uint32_t);
 	void rem_uectx(uint64_t);
 	
-	//for serializability
-	template<class Archive>
-	    void serialize(Archive &ar, const unsigned int version);
+
 
 
 public:

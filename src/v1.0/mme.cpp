@@ -206,6 +206,18 @@ void Mme::handle_initial_attach(int conn_fd, Packet pkt, SctpClient &hss_client)
 
 	TRACE(cout << "mme_handleinitialattach:" << " autn request sent to ran: " << guti << endl;	)
 }
+UeContext retrive_context(uint64_t guti){
+	UeContext local_ue_ctx;
+	auto RCObject = r_ue_ctx->get(guti);
+		if (RCObject.valid) {
+			this = *(RCObject.value);
+
+		}
+		return local_ue_ctx;
+}
+void sync_context(uint64_t guti,UeContext local_ue_ctx){
+	r_ue_ctx.put(guti,local_ue_ctx);
+}
 
 bool Mme::handle_autn(int conn_fd, Packet pkt) {
 	uint64_t guti;
@@ -222,11 +234,7 @@ bool Mme::handle_autn(int conn_fd, Packet pkt) {
 	}
 	pkt.extract_item(res);
 
-	auto RCObject = r_ue_ctx->get(guti);
-	if (RCObject.valid) {
-		local_ue_ctx = *(RCObject.value);
-		xres = local_ue_ctx.xres;
-	}
+	local_ue_ctx = retrive_context(guti);
 
 	/*
 	g_sync.mlock(uectx_mux);
@@ -265,10 +273,7 @@ void Mme::handle_security_mode_cmd(int conn_fd, Packet pkt) {
 
 
 
-	auto RCObject = r_ue_ctx->get(guti);
-	if (RCObject.valid) {
-		local_ue_ctx = *(RCObject.value);
-	}
+	local_ue_ctx = retrive_context(guti);
 
 	set_crypt_context(local_ue_ctx);
 	set_integrity_context(local_ue_ctx);
@@ -318,10 +323,8 @@ bool Mme::handle_security_mode_complete(int conn_fd, Packet pkt) {
 	bool res;
 
 	UeContext local_ue_ctx;
-	auto RCObject = r_ue_ctx->get(guti);
-	if (RCObject.valid) {
-		local_ue_ctx = *(RCObject.value);
-	}
+	local_ue_ctx = retrive_context(guti);
+
 
 	guti = get_guti(pkt);
 	if (guti == 0) {
@@ -362,10 +365,8 @@ void Mme::handle_location_update(Packet pkt, SctpClient &hss_client) {
 	uint64_t default_apn;
 
 	UeContext local_ue_ctx;
-		auto RCObject = r_ue_ctx->get(guti);
-		if (RCObject.valid) {
-			local_ue_ctx = *(RCObject.value);
-		}
+	local_ue_ctx = retrive_context(guti);
+
 
 	guti = get_guti(pkt);
 	if (guti == 0) {
@@ -403,7 +404,7 @@ void Mme::handle_location_update(Packet pkt, SctpClient &hss_client) {
 	ue_ctx[guti].apn_in_use = ue_ctx[guti].default_apn;
 	g_sync.munlock(uectx_mux);
 	*/
-	r_ue_ctx.put(guti,local_ue_ctx);
+	sync_context(guti,local_ue_ctx);
 }
 
 void Mme::handle_create_session(int conn_fd, Packet pkt, UdpClient &sgw_client) {
@@ -431,10 +432,8 @@ void Mme::handle_create_session(int conn_fd, Packet pkt, UdpClient &sgw_client) 
 	bool res;
 
 	UeContext local_ue_ctx;
-			auto RCObject = r_ue_ctx->get(guti);
-			if (RCObject.valid) {
-				local_ue_ctx = *(RCObject.value);
-			}
+	local_ue_ctx = retrive_context(guti);
+
 
 	guti = get_guti(pkt);
 	if (guti == 0) {
@@ -500,7 +499,7 @@ void Mme::handle_create_session(int conn_fd, Packet pkt, UdpClient &sgw_client) 
 	local_ue_ctx.tau_timer = g_timer;
 	local_ue_ctx.e_rab_id = local_ue_ctx.eps_bearer_id;
 	local_ue_ctx.k_enodeb = local_ue_ctx.k_asme;
-		e_rab_id = ue_ctx[guti].e_rab_id;
+		e_rab_id = local_ue_ctx.e_rab_id;
 		k_enodeb = local_ue_ctx.k_enodeb;
 		nw_capability = local_ue_ctx.nw_capability;
 		tai_list = local_ue_ctx.tai_list;
@@ -527,7 +526,7 @@ void Mme::handle_create_session(int conn_fd, Packet pkt, UdpClient &sgw_client) 
 	k_nas_int = ue_ctx[guti].k_nas_int;
 	g_sync.munlock(uectx_mux);*/
 
-    r_ue_ctx.put(guti,local_ue_ctx);
+    sync_context(guti,local_ue_ctx);
 
 
 	res = true;
@@ -567,10 +566,8 @@ void Mme::handle_attach_complete(Packet pkt) {
 	bool res;
 
 	UeContext local_ue_ctx;
-				auto RCObject = r_ue_ctx->get(guti);
-				if (RCObject.valid) {
-					local_ue_ctx = *(RCObject.value);
-				}
+	local_ue_ctx = retrive_context(guti);
+
 
 	guti = get_guti(pkt);
 	if (guti == 0) {
@@ -606,7 +603,7 @@ void Mme::handle_attach_complete(Packet pkt) {
 	local_ue_ctx.emm_state = 1;
 	//g_sync.munlock(uectx_mux);
 
-    r_ue_ctx.put(guti,local_ue_ctx);
+    sync_context(guti,local_ue_ctx);
 
 
 	TRACE(cout << "mme_handleattachcomplete:" << " attach completed: " << guti << endl;)
@@ -620,10 +617,8 @@ void Mme::handle_modify_bearer(Packet pkt, UdpClient &sgw_client) {
 	bool res;
 
 	UeContext local_ue_ctx;
-					auto RCObject = r_ue_ctx->get(guti);
-					if (RCObject.valid) {
-						local_ue_ctx = *(RCObject.value);
-					}
+	local_ue_ctx = retrive_context(guti);
+
 
 
 	guti = get_guti(pkt);
@@ -663,9 +658,10 @@ void Mme::handle_modify_bearer(Packet pkt, UdpClient &sgw_client) {
 		g_sync.mlock(uectx_mux);
 		local_ue_ctx.ecm_state = 1;
 		g_sync.munlock(uectx_mux);
+	    sync_context(guti,local_ue_ctx);
+
 		TRACE(cout << "mme_handlemodifybearer:" << " eps session setup success: " << guti << endl;		)
 	}
-    r_ue_ctx.put(guti,local_ue_ctx);
 
 }
 
@@ -681,10 +677,8 @@ void Mme::handle_detach(int conn_fd, Packet pkt, UdpClient &sgw_client) {
 	bool res;
 
 	UeContext local_ue_ctx;
-						auto RCObject = r_ue_ctx->get(guti);
-						if (RCObject.valid) {
-							local_ue_ctx = *(RCObject.value);
-						}
+	local_ue_ctx = retrive_context(guti);
+
 
 	guti = get_guti(pkt);
 	if (guti == 0) {
@@ -760,10 +754,17 @@ void Mme::handle_detach(int conn_fd, Packet pkt, UdpClient &sgw_client) {
 
 
 void Mme::set_pgw_info(uint64_t guti) {
-	g_sync.mlock(uectx_mux);
-	ue_ctx[guti].pgw_s5_port = g_pgw_s5_port;
-	ue_ctx[guti].pgw_s5_ip_addr = g_pgw_s5_ip_addr;
-	g_sync.munlock(uectx_mux);
+	//g_sync.mlock(uectx_mux);
+
+	UeContext local_ue_ctx;
+	local_ue_ctx = retrive_context(guti);
+
+	local_ue_ctx.pgw_s5_port = g_pgw_s5_port;
+	local_ue_ctx.pgw_s5_ip_addr = g_pgw_s5_ip_addr;
+
+	sync_context(local_ue_ctx,guti);
+
+	//g_sync.munlock(uectx_mux);
 }
 
 uint64_t Mme::get_guti(Packet pkt) {
@@ -787,15 +788,16 @@ uint64_t Mme::get_guti(Packet pkt) {
 }
 
 void Mme::rem_itfid(uint32_t mme_s1ap_ue_id) {
-	g_sync.mlock(s1mmeid_mux);
+	//g_sync.mlock(s1mmeid_mux);
 	r_s1mme_id.remove(mme_s1ap_ue_id);
-	g_sync.munlock(s1mmeid_mux);
+
+	//g_sync.munlock(s1mmeid_mux);
 }
 
 void Mme::rem_uectx(uint64_t guti) {
-	g_sync.mlock(uectx_mux);
-	ue_ctx.erase(guti);
-	g_sync.munlock(uectx_mux);
+	//g_sync.mlock(uectx_mux);
+	r_ue_ctx.remove(guti);
+	//g_sync.munlock(uectx_mux);
 }
 
 Mme::~Mme() {

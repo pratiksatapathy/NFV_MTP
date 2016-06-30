@@ -10,6 +10,8 @@
 #include "udp_client.h"
 #include "udp_server.h"
 #include "utils.h"
+#include "RMCMap.h"  //ramcloud
+
 
 extern string g_sgw_s5_ip_addr;
 extern string g_pgw_s5_ip_addr;
@@ -40,17 +42,25 @@ public:
 
 	UeContext();
 	void init(string, uint64_t, uint64_t, uint8_t, uint32_t, uint32_t, uint32_t, uint32_t);
+	template<class Archive>
+		void serialize(Archive &ar, const unsigned int version);
 	~UeContext();
 };
 
 class Pgw {
 private:
-	unordered_map<uint32_t, uint64_t> s5_id; /* S5 UE identification table: s5_cteid_ul -> imsi */
-	unordered_map<string, uint64_t> sgi_id; /* SGI UE identification table: ue_ip_addr -> imsi */
-	unordered_map<uint64_t, UeContext> ue_ctx; /* UE context table: imsi -> UeContext */
+	/*unordered_map<uint32_t, uint64_t> s5_id;  S5 UE identification table: s5_cteid_ul -> imsi
+	unordered_map<string, uint64_t> sgi_id;  SGI UE identification table: ue_ip_addr -> imsi
+	unordered_map<uint64_t, UeContext> ue_ctx;  UE context table: imsi -> UeContext
 
-	/* IP addresses table - Write once, Read always table - No need to put mlock */ 
-	unordered_map<uint64_t, string> ip_addrs; 
+	 IP addresses table - Write once, Read always table - No need to put mlock
+	unordered_map<uint64_t, string> ip_addrs; */
+
+	RMCMap<uint32_t,uint64_t> *r_s5_id;
+	RMCMap<string,uint64_t> *r_sgi_id;
+	RMCMap<uint64_t,UeContext> *r_ue_ctx;
+	RMCMap<uint64_t,string> *r_ip_addrs;
+
 
 	/* Lock parameters */
 	pthread_mutex_t s5id_mux; /* Handles s5_id */

@@ -9,6 +9,7 @@
 #include "sync.h"
 #include "udp_client.h"
 #include "udp_server.h"
+#include "RMCMap.h"  //ramcloud
 #include "utils.h"
 
 extern string g_sgw_s11_ip_addr;
@@ -47,15 +48,22 @@ public:
 
 	UeContext();
 	void init(uint64_t, uint64_t, uint8_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, string, int);
+	template<class Archive>
+	void serialize(Archive &ar, const unsigned int version);
 	~UeContext();
 };
 
 class Sgw {
 private:
-	unordered_map<uint32_t, uint64_t> s11_id; /* S11 UE identification table: s11_cteid_sgw -> imsi */
-	unordered_map<uint32_t, uint64_t> s1_id; /* S1 UE identification table: s1_uteid_ul -> imsi */
-	unordered_map<uint32_t, uint64_t> s5_id; /* S5 UE identification table: s5_uteid_dl -> imsi */
-	unordered_map<uint64_t, UeContext> ue_ctx; /* UE context table: imsi -> UeContext */
+/*	unordered_map<uint32_t, uint64_t> s11_id;  S11 UE identification table: s11_cteid_sgw -> imsi
+	unordered_map<uint32_t, uint64_t> s1_id;  S1 UE identification table: s1_uteid_ul -> imsi
+	unordered_map<uint32_t, uint64_t> s5_id;  S5 UE identification table: s5_uteid_dl -> imsi
+	unordered_map<uint64_t, UeContext> ue_ctx;  UE context table: imsi -> UeContext */
+
+	RMCMap<uint32_t,uint64_t> *r_s11_id;
+	RMCMap<uint32_t,uint64_t> *r_s1_id;
+	RMCMap<uint32_t,uint64_t> *r_s5_id;
+	RMCMap<uint64_t,UeContext> *r_ue_ctx;
 
 	/* Lock parameters */
 	pthread_mutex_t s11id_mux; /* Handles s11_id */
