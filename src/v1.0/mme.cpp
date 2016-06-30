@@ -51,6 +51,12 @@ UeContext::UeContext() {
 	s11_cteid_mme = 0;
 	s11_cteid_sgw = 0;	
 }
+//making serializable
+template<class Archive>
+void UeContext::serialize(Archive &ar, const unsigned int version)
+{
+	ar & emm_state & ecm_state & imsi & ip_addr & enodeb_s1ap_ue_id & mme_s1ap_ue_id & tai & tai_list & tau_timer & ksi_asme & k_asme & k_enodeb & k_nas_enc & k_nas_int & nas_enc_algo & nas_int_algo & count & bearer & dir & default_apn & apn_in_use & eps_bearer_id e_rab_id & s1_uteid_ul & s1_uteid_dl & s5_uteid_ul & s5_uteid_dl & xres & nw_type & nw_capability & pgw_s5_ip_addr & pgw_s5_port & s11_cteid_mme & s11_cteid_sgw;
+}
 
 void UeContext::init(uint64_t arg_imsi, uint32_t arg_enodeb_s1ap_ue_id, uint32_t arg_mme_s1ap_ue_id, uint64_t arg_tai, uint16_t arg_nw_capability) {
 	imsi = arg_imsi;
@@ -75,7 +81,7 @@ MmeIds::MmeIds() {
 }
 
 MmeIds::~MmeIds() {
-	
+
 }
 
 Mme::Mme() {
@@ -83,11 +89,17 @@ Mme::Mme() {
 	clrstl();
 	g_sync.mux_init(s1mmeid_mux);
 	g_sync.mux_init(uectx_mux);
+
+	//ramcloud init
+	r_s1mme_id = new RMCMap<uint32_t,uint64_t>((char *)rmc_path.c_str(),"s1mme_id");
+	r_ue_ctx = new RMCMap<uint64_t,UeContext>((char *)rmc_path.c_str(),"ue_ctx");
+
 }
 
 void Mme::clrstl() {
-	s1mme_id.clear();
-	ue_ctx.clear();
+	//r_s1mme_id.clear();
+	//r_ue_ctx.clear();
+	//ramcloud should not get cleared at this call
 }
 
 uint32_t Mme::get_s11cteidmme(uint64_t guti) {
@@ -101,6 +113,8 @@ uint32_t Mme::get_s11cteidmme(uint64_t guti) {
 }
 
 void Mme::handle_initial_attach(int conn_fd, Packet pkt, SctpClient &hss_client) {
+
+
 	uint64_t imsi;
 	uint64_t tai;
 	uint64_t ksi_asme;
@@ -114,6 +128,8 @@ void Mme::handle_initial_attach(int conn_fd, Packet pkt, SctpClient &hss_client)
 	uint32_t mme_s1ap_ue_id;
 	uint64_t guti;
 	uint64_t num_autn_vectors;
+
+	UeContext local_ue_ctx; //to be used for local copy of a ramcloud instance in this block
 
 	num_autn_vectors = 1;
 	pkt.extract_item(imsi);
@@ -129,12 +145,16 @@ void Mme::handle_initial_attach(int conn_fd, Packet pkt, SctpClient &hss_client)
 	g_sync.mlock(s1mmeid_mux);
 	ue_count++;
 	mme_s1ap_ue_id = ue_count;
-	s1mme_id[mme_s1ap_ue_id] = guti;
+	r_s1mme_id.put(mme_s1ap_ue_id,guti);//s1mme_id[mme_s1ap_ue_id] = guti;
 	g_sync.munlock(s1mmeid_mux);
-
 	g_sync.mlock(uectx_mux);
-	ue_ctx[guti].init(imsi, enodeb_s1ap_ue_id, mme_s1ap_ue_id, tai, nw_capability);
-	nw_type = ue_ctx[guti].nw_type;
+
+	local_ue_ctx.init(imsi, enodeb_s1ap_ue_id, mme_s1ap_ue_id, tai, nw_capability);
+	//ue_ctx[guti].init(imsi, enodeb_s1ap_ue_id, mme_s1ap_ue_id, tai, nw_capability);
+
+	nw_type = local_ue_ctx.nw_type;
+	//nw_type = ue_ctx[guti].nw_type;
+
 	TRACE(cout << "mme_handleinitialattach:" << ":ue entry added: " << guti << endl;)
 	g_sync.munlock(uectx_mux);
 
@@ -156,10 +176,18 @@ void Mme::handle_initial_attach(int conn_fd, Packet pkt, SctpClient &hss_client)
 	pkt.extract_item(k_asme);
 
 	g_sync.mlock(uectx_mux);
+
+	local_ue_ctx.xres = xres;
+	local_ue_ctx.k_asme = k_asme;
+	local_ue_ctx.ksi_asme = 1;
+	ksi_asme = local_ue_ctx.ksi_asme;
+
+	/*
 	ue_ctx[guti].xres = xres;
 	ue_ctx[guti].k_asme = k_asme;
 	ue_ctx[guti].ksi_asme = 1;
 	ksi_asme = ue_ctx[guti].ksi_asme;
+	 */
 	g_sync.munlock(uectx_mux);
 
 	TRACE(cout << "mme_handleinitialattach:" << " autn:" << autn_num <<" rand:" << rand_num << " xres:" << xres << " k_asme:" << k_asme << " " << guti << endl;)
@@ -170,6 +198,10 @@ void Mme::handle_initial_attach(int conn_fd, Packet pkt, SctpClient &hss_client)
 	pkt.append_item(ksi_asme);
 	pkt.prepend_s1ap_hdr(1, pkt.len, enodeb_s1ap_ue_id, mme_s1ap_ue_id);
 	server.snd(conn_fd, pkt);
+
+	//synch to ramcloud
+	r_ue_ctx.put(guti,local_ue_ctx);
+
 	TRACE(cout << "mme_handleinitialattach:" << " autn request sent to ran: " << guti << endl;	)
 }
 
@@ -178,19 +210,31 @@ bool Mme::handle_autn(int conn_fd, Packet pkt) {
 	uint64_t res;
 	uint64_t xres;
 
+	UeContext local_ue_ctx; //to be used for local copy of a ramcloud instance in this block
+
+
 	guti = get_guti(pkt);
 	if (guti == 0) {
 		TRACE(cout << "mme_handleautn:" << " zero guti " << pkt.s1ap_hdr.mme_s1ap_ue_id << " " << pkt.len << ": " << guti << endl;)
-		g_utils.handle_type1_error(-1, "Zero guti: mme_handleautn");
+				g_utils.handle_type1_error(-1, "Zero guti: mme_handleautn");
 	}
 	pkt.extract_item(res);
+
+	auto RCObject = r_ue_ctx->get(guti);
+	if (RCObject.valid) {
+		local_ue_ctx = *(RCObject.value);
+		xres = local_ue_ctx.xres;
+	}
+
+	/*
 	g_sync.mlock(uectx_mux);
 	xres = ue_ctx[guti].xres;
 	g_sync.munlock(uectx_mux);
+	 */
 	if (res == xres) {
 		/* Success */
 		TRACE(cout << "mme_handleautn:" << " Authentication successful: " << guti << endl;)
-		return true;
+				return true;
 	}
 	else {
 		rem_itfid(pkt.s1ap_hdr.mme_s1ap_ue_id);
@@ -208,21 +252,33 @@ void Mme::handle_security_mode_cmd(int conn_fd, Packet pkt) {
 	uint64_t k_nas_enc;
 	uint64_t k_nas_int;
 
+	UeContext local_ue_ctx; //to be used for local copy of a ramcloud instance in this block
+
+
 	guti = get_guti(pkt);
 	if (guti == 0) {
 		TRACE(cout << "mme_handlesecuritymodecmd:" << " zero guti " << pkt.s1ap_hdr.mme_s1ap_ue_id << " " << pkt.len << ": " << guti << endl;		)
-		g_utils.handle_type1_error(-1, "Zero guti: mme_handlesecuritymodecmd");
+				g_utils.handle_type1_error(-1, "Zero guti: mme_handlesecuritymodecmd");
 	}	
-	set_crypt_context(guti);
-	set_integrity_context(guti);
-	g_sync.mlock(uectx_mux);
-	ksi_asme = ue_ctx[guti].ksi_asme;
-	nw_capability = ue_ctx[guti].nw_capability;
-	nas_enc_algo = ue_ctx[guti].nas_enc_algo;
-	nas_int_algo = ue_ctx[guti].nas_int_algo;
-	k_nas_enc = ue_ctx[guti].k_nas_enc;
-	k_nas_int = ue_ctx[guti].k_nas_int;
-	g_sync.munlock(uectx_mux);
+
+
+
+	auto RCObject = r_ue_ctx->get(guti);
+	if (RCObject.valid) {
+		local_ue_ctx = *(RCObject.value);
+	}
+
+	set_crypt_context(local_ue_ctx);
+	set_integrity_context(local_ue_ctx);
+
+	//g_sync.mlock(uectx_mux);
+	ksi_asme = local_ue_ctx.ksi_asme;
+	nw_capability = local_ue_ctx.nw_capability;
+	nas_enc_algo = local_ue_ctx.nas_enc_algo;
+	nas_int_algo = local_ue_ctx.nas_int_algo;
+	k_nas_enc = local_ue_ctx.k_nas_enc;
+	k_nas_int = local_ue_ctx.k_nas_int;
+	//g_sync.munlock(uectx_mux);
 
 	pkt.clear_pkt();
 	pkt.append_item(ksi_asme);
@@ -237,18 +293,18 @@ void Mme::handle_security_mode_cmd(int conn_fd, Packet pkt) {
 	TRACE(cout << "mme_handlesecuritymodecmd:" << " security mode command sent: " << pkt.len << ": " << guti << endl;)
 }
 
-void Mme::set_crypt_context(uint64_t guti) {
-	g_sync.mlock(uectx_mux);
-	ue_ctx[guti].nas_enc_algo = 1;
-	ue_ctx[guti].k_nas_enc = ue_ctx[guti].k_asme + ue_ctx[guti].nas_enc_algo + ue_ctx[guti].count + ue_ctx[guti].bearer + ue_ctx[guti].dir;
-	g_sync.munlock(uectx_mux);
+void Mme::set_crypt_context(UeContext &local_ue_ctx) {
+	//g_sync.mlock(uectx_mux);
+	local_ue_ctx.nas_enc_algo = 1;
+	local_ue_ctx.k_nas_enc = local_ue_ctx.k_asme + local_ue_ctx.nas_enc_algo + local_ue_ctx.count + local_ue_ctx.bearer + local_ue_ctx.dir;
+	//g_sync.munlock(uectx_mux);
 }
 
-void Mme::set_integrity_context(uint64_t guti) {
-	g_sync.mlock(uectx_mux);
-	ue_ctx[guti].nas_int_algo = 1;
-	ue_ctx[guti].k_nas_int = ue_ctx[guti].k_asme + ue_ctx[guti].nas_int_algo + ue_ctx[guti].count + ue_ctx[guti].bearer + ue_ctx[guti].dir;
-	g_sync.munlock(uectx_mux);
+void Mme::set_integrity_context(UeContext &local_ue_ctx) {
+	//g_sync.mlock(uectx_mux);
+	local_ue_ctx.nas_int_algo = 1;
+	local_ue_ctx.k_nas_int = local_ue_ctx.k_asme + local_ue_ctx.nas_int_algo + local_ue_ctx.count + local_ue_ctx.bearer + local_ue_ctx.dir;
+	//g_sync.munlock(uectx_mux);
 }
 
 bool Mme::handle_security_mode_complete(int conn_fd, Packet pkt) {
@@ -257,15 +313,21 @@ bool Mme::handle_security_mode_complete(int conn_fd, Packet pkt) {
 	uint64_t k_nas_int;
 	bool res;
 
+	UeContext local_ue_ctx;
+	auto RCObject = r_ue_ctx->get(guti);
+	if (RCObject.valid) {
+		local_ue_ctx = *(RCObject.value);
+	}
+
 	guti = get_guti(pkt);
 	if (guti == 0) {
 		TRACE(cout << "mme_handlesecuritymodecomplete:" << " zero guti " << pkt.s1ap_hdr.mme_s1ap_ue_id << " " << pkt.len << ": " << guti << endl;		)
-		g_utils.handle_type1_error(-1, "Zero guti: mme_handlesecuritymodecomplete");
+				g_utils.handle_type1_error(-1, "Zero guti: mme_handlesecuritymodecomplete");
 	}		
-	g_sync.mlock(uectx_mux);
-	k_nas_enc = ue_ctx[guti].k_nas_enc;
-	k_nas_int = ue_ctx[guti].k_nas_int;
-	g_sync.munlock(uectx_mux);
+	//g_sync.mlock(uectx_mux);
+	k_nas_enc = local_ue_ctx.k_nas_enc;
+	k_nas_int = local_ue_ctx.k_nas_int;
+	//g_sync.munlock(uectx_mux);
 
 	TRACE(cout << "mme_handlesecuritymodecomplete:" << " security mode complete received: " << pkt.len << ": " << guti << endl;)
 
@@ -273,7 +335,7 @@ bool Mme::handle_security_mode_complete(int conn_fd, Packet pkt) {
 		res = g_integrity.hmac_check(pkt, k_nas_int);
 		if (res == false) {
 			TRACE(cout << "mme_handlesecuritymodecomplete:" << " hmac failure: " << guti << endl;)
-			g_utils.handle_type1_error(-1, "hmac failure: mme_handlesecuritymodecomplete");
+					g_utils.handle_type1_error(-1, "hmac failure: mme_handlesecuritymodecomplete");
 		}		
 	}
 	if (ENC_ON) {
@@ -282,11 +344,11 @@ bool Mme::handle_security_mode_complete(int conn_fd, Packet pkt) {
 	pkt.extract_item(res);
 	if (res == false) {
 		TRACE(cout << "mme_handlesecuritymodecomplete:" << " security mode complete failure: " << guti << endl;)
-		return false;
+				return false;
 	}
 	else {
 		TRACE(cout << "mme_handlesecuritymodecomplete:" << " security mode complete success: " << guti << endl;)
-		return true;
+				return true;
 	}
 }
 
@@ -298,7 +360,7 @@ void Mme::handle_location_update(Packet pkt, SctpClient &hss_client) {
 	guti = get_guti(pkt);
 	if (guti == 0) {
 		TRACE(cout << "mme_handlelocationupdate:" << " zero guti " << pkt.s1ap_hdr.mme_s1ap_ue_id << " " << pkt.len << ": " << guti << endl;		)
-		g_utils.handle_type1_error(-1, "Zero guti: mme_handlelocationupdate");
+				g_utils.handle_type1_error(-1, "Zero guti: mme_handlelocationupdate");
 	}		
 	g_sync.mlock(uectx_mux);
 	imsi = ue_ctx[guti].imsi;
@@ -348,11 +410,11 @@ void Mme::handle_create_session(int conn_fd, Packet pkt, UdpClient &sgw_client) 
 	guti = get_guti(pkt);
 	if (guti == 0) {
 		TRACE(cout << "mme_handlecreatesession:" << " zero guti " << pkt.s1ap_hdr.mme_s1ap_ue_id << " " << pkt.len << ": " << guti << endl;		)
-		g_utils.handle_type1_error(-1, "Zero guti: mme_handlecreatesession");
+				g_utils.handle_type1_error(-1, "Zero guti: mme_handlecreatesession");
 	}		
 	eps_bearer_id = 5;
 	set_pgw_info(guti);
-	
+
 	g_sync.mlock(uectx_mux);
 	ue_ctx[guti].s11_cteid_mme = get_s11cteidmme(guti);
 	ue_ctx[guti].eps_bearer_id = eps_bearer_id;
@@ -409,7 +471,7 @@ void Mme::handle_create_session(int conn_fd, Packet pkt, UdpClient &sgw_client) 
 
 	res = true;
 	tai_list_size = 1;
-	
+
 	pkt.clear_pkt();
 	pkt.append_item(guti);
 	pkt.append_item(eps_bearer_id);
@@ -446,9 +508,9 @@ void Mme::handle_attach_complete(Packet pkt) {
 	guti = get_guti(pkt);
 	if (guti == 0) {
 		TRACE(cout << "mme_handleattachcomplete:" << " zero guti " << pkt.s1ap_hdr.mme_s1ap_ue_id << " " << pkt.len << ": " << guti << endl;		)
-		g_utils.handle_type1_error(-1, "Zero guti: mme_handleattachcomplete");
+				g_utils.handle_type1_error(-1, "Zero guti: mme_handleattachcomplete");
 	}
-		
+
 	g_sync.mlock(uectx_mux);
 	k_nas_enc = ue_ctx[guti].k_nas_enc;
 	k_nas_int = ue_ctx[guti].k_nas_int;
@@ -460,7 +522,7 @@ void Mme::handle_attach_complete(Packet pkt) {
 		res = g_integrity.hmac_check(pkt, k_nas_int);
 		if (res == false) {
 			TRACE(cout << "mme_handleattachcomplete:" << " hmac failure: " << guti << endl;)
-			g_utils.handle_type1_error(-1, "hmac failure: mme_handleattachcomplete");
+					g_utils.handle_type1_error(-1, "hmac failure: mme_handleattachcomplete");
 		}
 	}
 	if (ENC_ON) {
@@ -485,15 +547,15 @@ void Mme::handle_modify_bearer(Packet pkt, UdpClient &sgw_client) {
 	guti = get_guti(pkt);
 	if (guti == 0) {
 		TRACE(cout << "mme_handlemodifybearer:" << " zero guti " << pkt.s1ap_hdr.mme_s1ap_ue_id << " " << pkt.len << ": " << guti << endl;		)
-		g_utils.handle_type1_error(-1, "Zero guti: mme_handlemodifybearer");
+				g_utils.handle_type1_error(-1, "Zero guti: mme_handlemodifybearer");
 	}	
-	
+
 	g_sync.mlock(uectx_mux);
 	eps_bearer_id = ue_ctx[guti].eps_bearer_id;
 	s1_uteid_dl = ue_ctx[guti].s1_uteid_dl;
 	s11_cteid_sgw = ue_ctx[guti].s11_cteid_sgw;
 	g_sync.munlock(uectx_mux);
-	
+
 	pkt.clear_pkt();
 	pkt.append_item(eps_bearer_id);
 	pkt.append_item(s1_uteid_dl);
@@ -529,11 +591,11 @@ void Mme::handle_detach(int conn_fd, Packet pkt, UdpClient &sgw_client) {
 	uint32_t s11_cteid_sgw;
 	uint8_t eps_bearer_id;
 	bool res;
-	
+
 	guti = get_guti(pkt);
 	if (guti == 0) {
 		TRACE(cout << "mme_handledetach:" << " zero guti " << pkt.s1ap_hdr.mme_s1ap_ue_id << " " << pkt.len << ": " << guti << endl;)
-		g_utils.handle_type1_error(-1, "Zero guti: mme_handledetach");
+				g_utils.handle_type1_error(-1, "Zero guti: mme_handledetach");
 	}
 	g_sync.mlock(uectx_mux);
 	k_nas_enc = ue_ctx[guti].k_nas_enc;
@@ -549,7 +611,7 @@ void Mme::handle_detach(int conn_fd, Packet pkt, UdpClient &sgw_client) {
 		res = g_integrity.hmac_check(pkt, k_nas_int);
 		if (res == false) {
 			TRACE(cout << "mme_handledetach:" << " hmac detach failure: " << guti << endl;)
-			g_utils.handle_type1_error(-1, "hmac failure: mme_handledetach");
+					g_utils.handle_type1_error(-1, "hmac failure: mme_handledetach");
 		}
 	}
 	if (ENC_ON) {
@@ -558,7 +620,7 @@ void Mme::handle_detach(int conn_fd, Packet pkt, UdpClient &sgw_client) {
 	pkt.extract_item(guti); /* It should be the same as that found in the first step */
 	pkt.extract_item(ksi_asme);
 	pkt.extract_item(detach_type);	
-	
+
 	pkt.clear_pkt();
 	pkt.append_item(eps_bearer_id);
 	pkt.append_item(tai);
@@ -573,11 +635,11 @@ void Mme::handle_detach(int conn_fd, Packet pkt, UdpClient &sgw_client) {
 	pkt.extract_item(res);
 	if (res == false) {
 		TRACE(cout << "mme_handledetach:" << " sgw detach failure: " << guti << endl;)
-		return;		
+				return;
 	}
 	pkt.clear_pkt();
 	pkt.append_item(res);
-	
+
 	if (ENC_ON) {
 		g_crypt.enc(pkt, k_nas_enc);
 	}
@@ -607,17 +669,23 @@ uint64_t Mme::get_guti(Packet pkt) {
 
 	guti = 0;
 	mme_s1ap_ue_id = pkt.s1ap_hdr.mme_s1ap_ue_id;
-	g_sync.mlock(s1mmeid_mux);
+
+
+	auto RCObject = r_s1mme_id->get(mme_s1ap_ue_id);
+	if (RCObject.valid) {
+		guti = *(RCObject.value);
+	}
+	/*g_sync.mlock(s1mmeid_mux);
 	if (s1mme_id.find(mme_s1ap_ue_id) != s1mme_id.end()) {
 		guti = s1mme_id[mme_s1ap_ue_id];
 	}
-	g_sync.munlock(s1mmeid_mux);
+	g_sync.munlock(s1mmeid_mux);*/
 	return guti;
 }
 
 void Mme::rem_itfid(uint32_t mme_s1ap_ue_id) {
 	g_sync.mlock(s1mmeid_mux);
-	s1mme_id.erase(mme_s1ap_ue_id);
+	r_s1mme_id.remove(mme_s1ap_ue_id);
 	g_sync.munlock(s1mmeid_mux);
 }
 

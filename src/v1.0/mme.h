@@ -12,6 +12,7 @@
 #include "sync.h"
 #include "telecom.h"
 #include "udp_client.h"
+#include "RMCMap.h"  //ramcloud
 #include "utils.h"
 
 extern string g_trafmon_ip_addr;
@@ -117,19 +118,28 @@ private:
 	unordered_map<uint32_t, uint64_t> s1mme_id; /* S1_MME UE identification table: mme_s1ap_ue_id -> guti */
 	unordered_map<uint64_t, UeContext> ue_ctx; /* UE context table: guti -> UeContext */
 
+
+	RMCMap<uint32_t,uint64_t> *r_s1mme_id;
+	RMCMap<uint64_t,UeContext> *r_ue_ctx;
+
 	/* Lock parameters */
 	pthread_mutex_t s1mmeid_mux; /* Handles s1mme_id and ue_count */
 	pthread_mutex_t uectx_mux; /* Handles ue_ctx */
 	
 	void clrstl();
 	uint32_t get_s11cteidmme(uint64_t);
-	void set_crypt_context(uint64_t);
-	void set_integrity_context(uint64_t);
+	void set_crypt_context(UeContext&);
+	void set_integrity_context(UeContext&);
 	void set_pgw_info(uint64_t);
 	uint64_t get_guti(Packet);
 	void rem_itfid(uint32_t);
 	void rem_uectx(uint64_t);
 	
+	//for serializability
+	template<class Archive>
+	    void serialize(Archive &ar, const unsigned int version);
+
+
 public:
 	SctpServer server;
 
