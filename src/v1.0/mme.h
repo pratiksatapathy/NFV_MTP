@@ -155,6 +155,8 @@ public:
 	void handle_attach_complete(Packet);
 	void handle_modify_bearer(Packet, UdpClient&);
 	void handle_detach(int, Packet, UdpClient&);
+	UeContext& retrive_context(uint64_t guti);
+	void sync_context(uint64_t guti,UeContext local_ue_ctx);
 	~Mme();
 };
 

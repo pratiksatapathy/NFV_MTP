@@ -7,6 +7,7 @@ string g_sgw_s11_ip_addr = "10.129.28.20";
 string g_sgw_s1_ip_addr = "10.129.28.20";
 string g_sgw_s5_ip_addr = "10.129.28.20";
 string g_pgw_s5_ip_addr = "10.129.28.20";
+
 int g_trafmon_port = 4000;
 int g_mme_port = 5000;
 int g_hss_port = 6000;
@@ -57,7 +58,7 @@ UeContext::UeContext() {
 template<class Archive>
 void UeContext::serialize(Archive &ar, const unsigned int version)
 {
-	ar & emm_state & ecm_state & imsi & ip_addr & enodeb_s1ap_ue_id & mme_s1ap_ue_id & tai & tai_list & tau_timer & ksi_asme & k_asme & k_enodeb & k_nas_enc & k_nas_int & nas_enc_algo & nas_int_algo & count & bearer & dir & default_apn & apn_in_use & eps_bearer_id e_rab_id & s1_uteid_ul & s1_uteid_dl & s5_uteid_ul & s5_uteid_dl & xres & nw_type & nw_capability & pgw_s5_ip_addr & pgw_s5_port & s11_cteid_mme & s11_cteid_sgw;
+	ar & emm_state & ecm_state & imsi & ip_addr & enodeb_s1ap_ue_id & mme_s1ap_ue_id & tai & tai_list & tau_timer & ksi_asme & k_asme & k_enodeb & k_nas_enc & k_nas_int & nas_enc_algo & nas_int_algo & count & bearer & dir & default_apn & apn_in_use & eps_bearer_id & e_rab_id & s1_uteid_ul & s1_uteid_dl & s5_uteid_ul & s5_uteid_dl & xres & nw_type & nw_capability & pgw_s5_ip_addr & pgw_s5_port & s11_cteid_mme & s11_cteid_sgw;
 }
 
 void UeContext::init(uint64_t arg_imsi, uint32_t arg_enodeb_s1ap_ue_id, uint32_t arg_mme_s1ap_ue_id, uint64_t arg_tai, uint16_t arg_nw_capability) {
@@ -147,10 +148,10 @@ void Mme::handle_initial_attach(int conn_fd, Packet pkt, SctpClient &hss_client)
 	g_sync.mlock(s1mmeid_mux);
 	ue_count++;
 	mme_s1ap_ue_id = ue_count;
-	r_s1mme_id.put(mme_s1ap_ue_id,guti);//s1mme_id[mme_s1ap_ue_id] = guti;
+	r_s1mme_id->put(mme_s1ap_ue_id,guti);//s1mme_id[mme_s1ap_ue_id] = guti;
 	g_sync.munlock(s1mmeid_mux);
 	g_sync.mlock(uectx_mux);
-
+	cout<<"imsi value before localctxt"<<imsi<<endl;
 	local_ue_ctx.init(imsi, enodeb_s1ap_ue_id, mme_s1ap_ue_id, tai, nw_capability);
 	//ue_ctx[guti].init(imsi, enodeb_s1ap_ue_id, mme_s1ap_ue_id, tai, nw_capability);
 
@@ -160,6 +161,7 @@ void Mme::handle_initial_attach(int conn_fd, Packet pkt, SctpClient &hss_client)
 	TRACE(cout << "mme_handleinitialattach:" << ":ue entry added: " << guti << endl;)
 	g_sync.munlock(uectx_mux);
 
+	cout<<"imsi value at initial attach"<<imsi<<", "<<local_ue_ctx.imsi<<endl;
 	pkt.clear_pkt();
 	pkt.append_item(imsi);
 	pkt.append_item(mme_ids.plmn_id);
@@ -202,21 +204,24 @@ void Mme::handle_initial_attach(int conn_fd, Packet pkt, SctpClient &hss_client)
 	server.snd(conn_fd, pkt);
 
 	//synch to ramcloud
-	r_ue_ctx.put(guti,local_ue_ctx);
+	r_ue_ctx->put(guti,local_ue_ctx);
+	cout<<"zzzzzzzzzzbefore"<<local_ue_ctx.imsi<<endl;
+	UeContext u = retrive_context(guti);
+	cout<<"zzzzzzzzzzafter"<<u.imsi<<endl;
 
 	TRACE(cout << "mme_handleinitialattach:" << " autn request sent to ran: " << guti << endl;	)
 }
-UeContext retrive_context(uint64_t guti){
-	UeContext local_ue_ctx;
+UeContext& Mme::retrive_context(uint64_t guti){
+	UeContext *local_ue_ctx = new UeContext();
 	auto RCObject = r_ue_ctx->get(guti);
 		if (RCObject.valid) {
-			this = *(RCObject.value);
+			local_ue_ctx = RCObject.value;
 
 		}
-		return local_ue_ctx;
+		return *local_ue_ctx;
 }
-void sync_context(uint64_t guti,UeContext local_ue_ctx){
-	r_ue_ctx.put(guti,local_ue_ctx);
+void Mme::sync_context(uint64_t guti,UeContext local_ue_ctx){
+	r_ue_ctx->put(guti,local_ue_ctx);
 }
 
 bool Mme::handle_autn(int conn_fd, Packet pkt) {
@@ -235,6 +240,7 @@ bool Mme::handle_autn(int conn_fd, Packet pkt) {
 	pkt.extract_item(res);
 
 	local_ue_ctx = retrive_context(guti);
+	xres = local_ue_ctx.xres;
 
 	/*
 	g_sync.mlock(uectx_mux);
@@ -287,7 +293,8 @@ void Mme::handle_security_mode_cmd(int conn_fd, Packet pkt) {
 	k_nas_int = local_ue_ctx.k_nas_int;
 	//g_sync.munlock(uectx_mux);
 
-	r_ue_ctx.put(guti,local_ue_ctx);
+
+	r_ue_ctx->put(guti,local_ue_ctx);
 
 	pkt.clear_pkt();
 	pkt.append_item(ksi_asme);
@@ -322,8 +329,6 @@ bool Mme::handle_security_mode_complete(int conn_fd, Packet pkt) {
 	uint64_t k_nas_int;
 	bool res;
 
-	UeContext local_ue_ctx;
-	local_ue_ctx = retrive_context(guti);
 
 
 	guti = get_guti(pkt);
@@ -332,6 +337,10 @@ bool Mme::handle_security_mode_complete(int conn_fd, Packet pkt) {
 				g_utils.handle_type1_error(-1, "Zero guti: mme_handlesecuritymodecomplete");
 	}		
 	//g_sync.mlock(uectx_mux);
+
+	UeContext local_ue_ctx;
+	local_ue_ctx = retrive_context(guti);
+
 	k_nas_enc = local_ue_ctx.k_nas_enc;
 	k_nas_int = local_ue_ctx.k_nas_int;
 	//g_sync.munlock(uectx_mux);
@@ -364,8 +373,7 @@ void Mme::handle_location_update(Packet pkt, SctpClient &hss_client) {
 	uint64_t imsi;
 	uint64_t default_apn;
 
-	UeContext local_ue_ctx;
-	local_ue_ctx = retrive_context(guti);
+
 
 
 	guti = get_guti(pkt);
@@ -374,6 +382,8 @@ void Mme::handle_location_update(Packet pkt, SctpClient &hss_client) {
 				g_utils.handle_type1_error(-1, "Zero guti: mme_handlelocationupdate");
 	}
 
+	UeContext local_ue_ctx;
+	local_ue_ctx = retrive_context(guti);
 	imsi = local_ue_ctx.imsi;
 
 	/*
@@ -398,6 +408,8 @@ void Mme::handle_location_update(Packet pkt, SctpClient &hss_client) {
 
 	local_ue_ctx.default_apn = default_apn;
 	local_ue_ctx.apn_in_use = local_ue_ctx.default_apn;
+
+
 	/*
 	g_sync.mlock(uectx_mux);
 	ue_ctx[guti].default_apn = default_apn;
@@ -431,8 +443,6 @@ void Mme::handle_create_session(int conn_fd, Packet pkt, UdpClient &sgw_client) 
 	int pgw_s5_port;
 	bool res;
 
-	UeContext local_ue_ctx;
-	local_ue_ctx = retrive_context(guti);
 
 
 	guti = get_guti(pkt);
@@ -442,16 +452,22 @@ void Mme::handle_create_session(int conn_fd, Packet pkt, UdpClient &sgw_client) 
 	}		
 	eps_bearer_id = 5;
 	set_pgw_info(guti);
+	UeContext local_ue_ctx;
+	local_ue_ctx = retrive_context(guti);
+
+		cout<<"zzzzzzzzzz============="<<local_ue_ctx.imsi<<endl;
 
 	local_ue_ctx.s11_cteid_mme = get_s11cteidmme(guti);
 	local_ue_ctx.eps_bearer_id = eps_bearer_id;
-		s11_cteid_mme = local_ue_ctx.s11_cteid_mme;
-		imsi = local_ue_ctx.imsi;
-		eps_bearer_id = local_ue_ctx.eps_bearer_id;
-		pgw_s5_ip_addr = local_ue_ctx.pgw_s5_ip_addr;
-		pgw_s5_port = local_ue_ctx.pgw_s5_port;
-		apn_in_use = local_ue_ctx.apn_in_use;
-		tai = local_ue_ctx.tai;
+	s11_cteid_mme = local_ue_ctx.s11_cteid_mme;
+	imsi = local_ue_ctx.imsi;
+	eps_bearer_id = local_ue_ctx.eps_bearer_id;
+	pgw_s5_ip_addr = local_ue_ctx.pgw_s5_ip_addr;
+	pgw_s5_port = local_ue_ctx.pgw_s5_port;
+	apn_in_use = local_ue_ctx.apn_in_use;
+	tai = local_ue_ctx.tai;
+
+	cout<<"----------- imsi value:"<<s11_cteid_mme<<imsi<<eps_bearer_id = <<endl;
 
 	/*g_sync.mlock(uectx_mux);
 	ue_ctx[guti].s11_cteid_mme = get_s11cteidmme(guti);
@@ -499,13 +515,13 @@ void Mme::handle_create_session(int conn_fd, Packet pkt, UdpClient &sgw_client) 
 	local_ue_ctx.tau_timer = g_timer;
 	local_ue_ctx.e_rab_id = local_ue_ctx.eps_bearer_id;
 	local_ue_ctx.k_enodeb = local_ue_ctx.k_asme;
-		e_rab_id = local_ue_ctx.e_rab_id;
-		k_enodeb = local_ue_ctx.k_enodeb;
-		nw_capability = local_ue_ctx.nw_capability;
-		tai_list = local_ue_ctx.tai_list;
-		tau_timer = local_ue_ctx.tau_timer;
-		k_nas_enc = local_ue_ctx.k_nas_enc;
-		k_nas_int = local_ue_ctx.k_nas_int;
+	e_rab_id = local_ue_ctx.e_rab_id;
+	k_enodeb = local_ue_ctx.k_enodeb;
+	nw_capability = local_ue_ctx.nw_capability;
+	tai_list = local_ue_ctx.tai_list;
+	tau_timer = local_ue_ctx.tau_timer;
+	k_nas_enc = local_ue_ctx.k_nas_enc;
+	k_nas_int = local_ue_ctx.k_nas_int;
 	/*g_sync.mlock(uectx_mux);
 	ue_ctx[guti].ip_addr = ue_ip_addr;
 	ue_ctx[guti].s11_cteid_sgw = s11_cteid_sgw;
@@ -565,8 +581,7 @@ void Mme::handle_attach_complete(Packet pkt) {
 	uint8_t eps_bearer_id;
 	bool res;
 
-	UeContext local_ue_ctx;
-	local_ue_ctx = retrive_context(guti);
+
 
 
 	guti = get_guti(pkt);
@@ -575,6 +590,8 @@ void Mme::handle_attach_complete(Packet pkt) {
 				g_utils.handle_type1_error(-1, "Zero guti: mme_handleattachcomplete");
 	}
 
+	UeContext local_ue_ctx;
+	local_ue_ctx = retrive_context(guti);
 	k_nas_enc = local_ue_ctx.k_nas_enc;
 		k_nas_int = local_ue_ctx.k_nas_int;
 
@@ -616,8 +633,7 @@ void Mme::handle_modify_bearer(Packet pkt, UdpClient &sgw_client) {
 	uint8_t eps_bearer_id;
 	bool res;
 
-	UeContext local_ue_ctx;
-	local_ue_ctx = retrive_context(guti);
+
 
 
 
@@ -627,6 +643,8 @@ void Mme::handle_modify_bearer(Packet pkt, UdpClient &sgw_client) {
 				g_utils.handle_type1_error(-1, "Zero guti: mme_handlemodifybearer");
 	}	
 
+UeContext local_ue_ctx;
+	local_ue_ctx = retrive_context(guti);
 	eps_bearer_id = local_ue_ctx.eps_bearer_id;
 	s1_uteid_dl = local_ue_ctx.s1_uteid_dl;
 	s11_cteid_sgw = local_ue_ctx.s11_cteid_sgw;
@@ -676,8 +694,7 @@ void Mme::handle_detach(int conn_fd, Packet pkt, UdpClient &sgw_client) {
 	uint8_t eps_bearer_id;
 	bool res;
 
-	UeContext local_ue_ctx;
-	local_ue_ctx = retrive_context(guti);
+
 
 
 	guti = get_guti(pkt);
@@ -685,7 +702,8 @@ void Mme::handle_detach(int conn_fd, Packet pkt, UdpClient &sgw_client) {
 		TRACE(cout << "mme_handledetach:" << " zero guti " << pkt.s1ap_hdr.mme_s1ap_ue_id << " " << pkt.len << ": " << guti << endl;)
 				g_utils.handle_type1_error(-1, "Zero guti: mme_handledetach");
 	}
-
+UeContext local_ue_ctx;
+	local_ue_ctx = retrive_context(guti);
 	k_nas_enc = local_ue_ctx.k_nas_enc;
 		k_nas_int = local_ue_ctx.k_nas_int;
 		eps_bearer_id = local_ue_ctx.eps_bearer_id;
@@ -762,7 +780,7 @@ void Mme::set_pgw_info(uint64_t guti) {
 	local_ue_ctx.pgw_s5_port = g_pgw_s5_port;
 	local_ue_ctx.pgw_s5_ip_addr = g_pgw_s5_ip_addr;
 
-	sync_context(local_ue_ctx,guti);
+	sync_context(guti,local_ue_ctx);
 
 	//g_sync.munlock(uectx_mux);
 }
@@ -789,14 +807,14 @@ uint64_t Mme::get_guti(Packet pkt) {
 
 void Mme::rem_itfid(uint32_t mme_s1ap_ue_id) {
 	//g_sync.mlock(s1mmeid_mux);
-	r_s1mme_id.remove(mme_s1ap_ue_id);
+	r_s1mme_id->remove(mme_s1ap_ue_id);
 
 	//g_sync.munlock(s1mmeid_mux);
 }
 
 void Mme::rem_uectx(uint64_t guti) {
 	//g_sync.mlock(uectx_mux);
-	r_ue_ctx.remove(guti);
+	r_ue_ctx->remove(guti);
 	//g_sync.munlock(uectx_mux);
 }
 
