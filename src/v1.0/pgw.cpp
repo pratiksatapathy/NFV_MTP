@@ -41,18 +41,27 @@ void UeContext::serialize(Archive &ar, const unsigned int version)
 }
 
 Pgw::Pgw() {
+
+
+r_ip_addrs = new RMCMap<uint64_t,string>((char *)rmc_path.c_str(),"p_ip_addrs_id");
+r_sgi_id = new RMCMap<string,uint64_t>((char *)rmc_path.c_str(),"p_sgi_id");
+r_s5_id = new RMCMap<uint32_t,uint64_t>((char *)rmc_path.c_str(),"p_s5_id");
+r_ue_ctx = new RMCMap<uint64_t,UeContext>((char *)rmc_path.c_str(),"p_ue_ctx");
+
 	clrstl();
 	set_ip_addrs();
 	g_sync.mux_init(s5id_mux);	
 	g_sync.mux_init(sgiid_mux);	
 	g_sync.mux_init(uectx_mux);	
+
+
 }
 
 void Pgw::clrstl() {
-	r_s5_id.clear();
-	r_sgi_id.clear();
-	r_ue_ctx.clear();
-	r_ip_addrs.clear();
+	r_s5_id->clear();
+	r_sgi_id->clear();
+	r_ue_ctx->clear();
+	r_ip_addrs->clear();
 }
 
 void Pgw::handle_create_session(struct sockaddr_in src_sock_addr, Packet pkt) {
@@ -87,6 +96,8 @@ void Pgw::handle_create_session(struct sockaddr_in src_sock_addr, Packet pkt) {
 	/*g_sync.mlock(uectx_mux);
 	ue_ctx[imsi].init(ue_ip_addr, tai, apn_in_use, eps_bearer_id, s5_uteid_ul, s5_uteid_dl, s5_cteid_ul, s5_cteid_dl);
 	g_sync.munlock(uectx_mux);	*/
+
+	sync_context(imsi,local_ue_ctx);
 
 	pkt.clear_pkt();
 	pkt.append_item(s5_cteid_ul);
@@ -183,8 +194,8 @@ void Pgw::set_ip_addrs() {
 	for (i = 0; i < MAX_UE_COUNT; i++) {
 		imsi = 119000000000 + i;
 		ip_addr = prefix + to_string(subnet) + "." + to_string(host);
-
-		r_ip_addrs.put(imsi,ip_addr);
+				//ip_addrs[imsi] = ip_addr;
+		r_ip_addrs->put(imsi,ip_addr);
 		if (host == 254) {
 			subnet++;
 			host = 3;
@@ -201,46 +212,58 @@ void Pgw::update_itfid(int itf_id_no, uint32_t teid, string ue_ip_addr, uint64_t
 			/*g_sync.mlock(s5id_mux);
 			s5_id[teid] = imsi;
 			g_sync.munlock(s5id_mux);*/
-			r_s5_id.put(teid,imsi);
+			r_s5_id->put(teid,imsi);
 
 			break;
 		case 0:
 			/*g_sync.mlock(sgiid_mux);
 			sgi_id[ue_ip_addr] = imsi;
 			g_sync.munlock(sgiid_mux);*/
-			r_sgi_id(imsi,ue_ip_addr);
+			r_sgi_id->put(ue_ip_addr,imsi);
 
 			break;
 		default:
 			g_utils.handle_type1_error(-1, "incorrect itf_id_no: pgw_updateitfid");
 	}
 }
-uint64_t retrive_sgi_id(uint32_t guti){
+uint64_t Pgw::retrive_s5_id(uint32_t teid){
 	uint64_t imsi;
-	auto RCObject = r_sgi_id->get(guti);
+	auto RCObject = r_s5_id->get(teid);
 		if (RCObject.valid) {
-			this = *(RCObject.value);
+			imsi = *(RCObject.value);
 
 		}
 		return imsi;
 }
-string retrive_ip_addrs(uint64_t guti){
+uint64_t Pgw::retrive_sgi_id(string ip_addr){
+	uint64_t imsi;
+	auto RCObject = r_sgi_id->get(ip_addr);
+		if (RCObject.valid) {
+			imsi = *(RCObject.value);
+
+		}
+		return imsi;
+}
+string Pgw::retrive_ip_addrs(uint64_t guti){
 	string ipadd;
 	auto RCObject = r_ip_addrs->get(guti);
 		if (RCObject.valid) {
-			this = *(RCObject.value);
+			ipadd = *(RCObject.value);
 
 		}
 		return ipadd;
 }
-UeContext retrive_context(uint32_t imsi){
-	UeContext local_ctx;
+UeContext& Pgw::retrive_context(uint64_t guti){
+	UeContext *local_ue_ctx = new UeContext();
 	auto RCObject = r_ue_ctx->get(guti);
 		if (RCObject.valid) {
-			this = *(RCObject.value);
+			local_ue_ctx = RCObject.value;
 
 		}
-		return local_ctx;
+		return *local_ue_ctx;
+}
+void Pgw::sync_context(uint64_t imsi,UeContext local_ue_ctx){
+	r_ue_ctx->put(imsi,local_ue_ctx);
 }
 
 uint64_t Pgw::get_imsi(int itf_id_no, uint32_t teid, string ue_ip_addr) {
@@ -258,7 +281,7 @@ uint64_t Pgw::get_imsi(int itf_id_no, uint32_t teid, string ue_ip_addr) {
 			g_sync.munlock(s5id_mux);*/
 			break;
 		case 0:
-			imsi = retrive_sgi_id(teid);
+			imsi = retrive_sgi_id(ue_ip_addr);
 
 			/*g_sync.mlock(sgiid_mux);
 			if (sgi_id.find(ue_ip_addr) != sgi_id.end()) {
@@ -290,12 +313,12 @@ void Pgw::rem_itfid(int itf_id_no, uint32_t teid, string ue_ip_addr) {
 	switch (itf_id_no) {
 		case 5:
 			//g_sync.mlock(s5id_mux);
-			r_s5_id.remove(teid);
+			r_s5_id->remove(teid);
 			//g_sync.munlock(s5id_mux);
 			break;
 		case 0:
 			//g_sync.mlock(sgiid_mux);
-			r_sgi_id.remove(ue_ip_addr);
+			r_sgi_id->remove(ue_ip_addr);
 			//g_sync.munlock(sgiid_mux);
 			break;
 		default:
@@ -305,7 +328,7 @@ void Pgw::rem_itfid(int itf_id_no, uint32_t teid, string ue_ip_addr) {
 
 void Pgw::rem_uectx(uint64_t imsi) {
 	//g_sync.mlock(uectx_mux);
-	r_ue_ctx.remove(imsi);
+	r_ue_ctx->remove(imsi);
 	//g_sync.munlock(uectx_mux);
 }
 

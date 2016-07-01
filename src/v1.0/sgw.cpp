@@ -53,23 +53,32 @@ Sgw::Sgw() {
 	g_sync.mux_init(s1id_mux);	
 	g_sync.mux_init(s5id_mux);	
 	g_sync.mux_init(uectx_mux);	
+
+r_s11_id = new RMCMap<uint32_t,uint64_t>((char *)rmc_path.c_str(),"s_s11_id");
+r_s1_id = new RMCMap<uint32_t,uint64_t>((char *)rmc_path.c_str(),"s_s1_id");
+r_s5_id = new RMCMap<uint32_t,uint64_t>((char *)rmc_path.c_str(),"s_s5_id");
+r_ue_ctx = new RMCMap<uint64_t,UeContext>((char *)rmc_path.c_str(),"s_ue_ctx");
 }
 
 void Sgw::clrstl() {
-	r_s11_id.clear();
-	r_s1_id.clear();
-	r_s5_id.clear();
-	r_ue_ctx.clear();
+	r_s11_id->clear();
+	r_s1_id->clear();
+	r_s5_id->clear();
+	r_ue_ctx->clear();
 }
-UeContext retrive_context(uint64_t imsi){
-	UeContext local_ue_ctx;
-	auto RCObject = r_ue_ctx->get(imsi);
+UeContext& Sgw::retrive_context(uint64_t guti){
+	UeContext *local_ue_ctx = new UeContext();
+	auto RCObject = r_ue_ctx->get(guti);
 		if (RCObject.valid) {
-			this = *(RCObject.value);
+			local_ue_ctx = RCObject.value;
 
 		}
-		return local_ue_ctx;
+		return *local_ue_ctx;
 }
+void Sgw::sync_context(uint64_t guti,UeContext local_ue_ctx){
+	r_ue_ctx->put(guti,local_ue_ctx);
+}
+
 void Sgw::handle_create_session(struct sockaddr_in src_sock_addr, Packet pkt, UdpClient &pgw_s5_client) {
 	uint32_t s1_uteid_ul;
 	uint32_t s5_uteid_ul;
@@ -86,6 +95,8 @@ void Sgw::handle_create_session(struct sockaddr_in src_sock_addr, Packet pkt, Ud
 	string ue_ip_addr;
 	int pgw_s5_port;
 
+	cout<<"mark1"<<endl;
+
 	pkt.extract_item(s11_cteid_mme);
 	pkt.extract_item(imsi);
 	pkt.extract_item(eps_bearer_id);
@@ -97,9 +108,13 @@ void Sgw::handle_create_session(struct sockaddr_in src_sock_addr, Packet pkt, Ud
 	s5_uteid_dl = s11_cteid_mme;
 	s11_cteid_sgw = s11_cteid_mme;
 	s5_cteid_dl = s11_cteid_mme;
+
+		cout<<"mark2"<<imsi<<endl;
 	update_itfid(11, s11_cteid_sgw, imsi);
 	update_itfid(1, s1_uteid_ul, imsi);
 	update_itfid(5, s5_uteid_dl, imsi);
+
+		//cout<<"mark2"<<endl;
 
 	UeContext local_ue_ctx;
 	local_ue_ctx.init(tai, apn_in_use, eps_bearer_id, s1_uteid_ul, s5_uteid_dl, s11_cteid_mme, s11_cteid_sgw, s5_cteid_dl, pgw_s5_ip_addr, pgw_s5_port);
@@ -139,7 +154,7 @@ void Sgw::handle_create_session(struct sockaddr_in src_sock_addr, Packet pkt, Ud
 	local_ue_ctx.s5_uteid_ul = s5_uteid_ul;
 	local_ue_ctx.s5_cteid_ul = s5_cteid_ul;
 
-	r_ue_ctx.put(imsi,local_ue_ctx);
+	sync_context(imsi,local_ue_ctx);
 
 	pkt.clear_pkt();
 	pkt.append_item(s11_cteid_sgw);
@@ -179,7 +194,7 @@ void Sgw::handle_modify_bearer(struct sockaddr_in src_sock_addr, Packet pkt) {
 	local_ue_ctx.enodeb_port = enodeb_port;
 	s11_cteid_mme = local_ue_ctx.s11_cteid_mme;
 
-	r_ue_ctx.put(imsi,local_ue_ctx);
+	sync_context(imsi,local_ue_ctx);
 
 
 /*	g_sync.mlock(uectx_mux);
@@ -316,49 +331,50 @@ void Sgw::handle_detach(struct sockaddr_in src_sock_addr, Packet pkt, UdpClient 
 	TRACE(cout << "sgw_handledetach:" << " ue entry removed: " << imsi << " " << endl;)
 	TRACE(cout << "sgw_handledetach:" << " detach successful: " << imsi << endl;)
 }
-uint64_t retrive_s11_id(uint32_t guti){
+uint64_t Sgw::retrive_s11_id(uint32_t teid){
 	uint64_t imsi;
-	auto RCObject = r_s11_id->get(guti);
+	auto RCObject = r_s11_id->get(teid);
 		if (RCObject.valid) {
-			this = *(RCObject.value);
+			imsi = *(RCObject.value);
 
 		}
 		return imsi;
 }
-uint64_t retrive_s1_id(uint32_t guti){
+uint64_t Sgw::retrive_s1_id(uint32_t teid){
 	uint64_t imsi;
-	auto RCObject = r_s1_id->get(guti);
+	auto RCObject = r_s1_id->get(teid);
 		if (RCObject.valid) {
-			this = *(RCObject.value);
+			imsi = *(RCObject.value);
 
 		}
 		return imsi;
 }
-uint64_t retrive_s15_id(uint32_t guti){
+uint64_t Sgw::retrive_s5_id(uint32_t teid){
 	uint64_t imsi;
-	auto RCObject = r_s5_id->get(guti);
+	auto RCObject = r_s5_id->get(teid);
 		if (RCObject.valid) {
-			this = *(RCObject.value);
+			imsi = *(RCObject.value);
 
 		}
 		return imsi;
 }
 
 void Sgw::update_itfid(int itf_id_no, uint32_t teid, uint64_t imsi) {
+	cout<<"mark4:"<<itf_id_no<<endl;
 	switch (itf_id_no) {
 		case 11:
 			//g_sync.mlock(s11id_mux);
-			r_s11_id.put(teid,imsi);
+			r_s11_id->put(teid,imsi);
 			//g_sync.munlock(s11id_mux);
 			break;
 		case 1:
 			//g_sync.mlock(s1id_mux);
-			r_s1_id.put(teid,imsi);
+			r_s1_id->put(teid,imsi);
 			//g_sync.munlock(s1id_mux);
 			break;
 		case 5:
 			//g_sync.mlock(s5id_mux);
-			r_s5_id.put(teid,imsi);
+			r_s5_id->put(teid,imsi);
 			//g_sync.munlock(s5id_mux);
 			break;
 		default:
@@ -456,17 +472,17 @@ void Sgw::rem_itfid(int itf_id_no, uint32_t teid) {
 	switch (itf_id_no) {
 		case 11:
 			g_sync.mlock(s11id_mux);
-			r_s11_id.erase(teid);
+			r_s11_id->remove(teid);
 			g_sync.munlock(s11id_mux);
 			break;
 		case 1:
 			g_sync.mlock(s1id_mux);
-			r_s1_id.erase(teid);
+			r_s1_id->remove(teid);
 			g_sync.munlock(s1id_mux);		
 			break;
 		case 5:
 			g_sync.mlock(s5id_mux);
-			r_s5_id.erase(teid);
+			r_s5_id->remove(teid);
 			g_sync.munlock(s5id_mux);		
 			break;
 		default:
@@ -476,7 +492,7 @@ void Sgw::rem_itfid(int itf_id_no, uint32_t teid) {
 
 void Sgw::rem_uectx(uint64_t imsi) {
 	g_sync.mlock(uectx_mux);	
-	r_ue_ctx.remove(imsi);
+	r_ue_ctx->remove(imsi);
 	g_sync.munlock(uectx_mux);	
 }
 

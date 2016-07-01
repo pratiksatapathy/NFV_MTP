@@ -90,6 +90,12 @@ public:
 	void handle_uplink_udata(Packet, UdpClient&);
 	void handle_downlink_udata(Packet, UdpClient&);
 	void handle_detach(struct sockaddr_in, Packet, UdpClient&);
+
+	UeContext& retrive_context(uint64_t imsi);
+	void sync_context(uint64_t imsi,UeContext local_ue_ctx);
+	uint64_t retrive_s11_id(uint32_t teid);
+	uint64_t retrive_s1_id(uint32_t teid);
+	uint64_t retrive_s5_id(uint32_t teid);
 	~Sgw();
 };
 

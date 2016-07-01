@@ -52,6 +52,7 @@ typedef std::chrono::microseconds MICROSECONDS;
 #define TRACE(x) if (DEBUG) { x }
 
 const int MAX_UE_COUNT = 10000;
+const string rmc_path = "tcp:host=10.129.28.101,port=11100";
 
 class Utils {
 public:

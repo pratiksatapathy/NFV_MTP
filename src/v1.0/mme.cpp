@@ -467,7 +467,7 @@ void Mme::handle_create_session(int conn_fd, Packet pkt, UdpClient &sgw_client) 
 	apn_in_use = local_ue_ctx.apn_in_use;
 	tai = local_ue_ctx.tai;
 
-	cout<<"----------- imsi value:"<<s11_cteid_mme<<imsi<<eps_bearer_id = <<endl;
+	//cout<<"----------- imsi value:"<<s11_cteid_mme<<imsi<<eps_bearer_id = <<endl;
 
 	/*g_sync.mlock(uectx_mux);
 	ue_ctx[guti].s11_cteid_mme = get_s11cteidmme(guti);

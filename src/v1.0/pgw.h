@@ -84,6 +84,13 @@ public:
 	void handle_uplink_udata(Packet, UdpClient&);
 	void handle_downlink_udata(Packet, UdpClient&);
 	void handle_detach(struct sockaddr_in, Packet);
+
+	uint64_t retrive_sgi_id(string ip_addr);
+	string retrive_ip_addrs(uint64_t guti);
+	UeContext& retrive_context(uint64_t guti);
+	uint64_t retrive_s5_id(uint32_t teid);
+	void sync_context(uint64_t imsi,UeContext local_ue_ctx);
+
 	~Pgw();
 };
 

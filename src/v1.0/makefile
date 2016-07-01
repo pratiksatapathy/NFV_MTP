@@ -9,6 +9,10 @@ all:	hss.out mme.out pgw.out ransim.out sgw.out sink.out
 
 G++ = g++ -std=c++0x -std=c++11 -std=gnu++0x -ggdb
 
+RMC1 =  g++ -std=c++0x  -Wno-deprecated -g -DNDEBUG -I/home/mme1/RAMCloud/install/include -I.
+RMC2 =  /usr/lib/x86_64-linux-gnu/libboost_serialization.so -L/home/mme1/RAMCloud/install/bin -lramcloud -Wl,-rpath=/home/mme1/RAMCloud/install/bin
+
+
 #-------------------------------------------#
 
 
@@ -20,17 +24,18 @@ diameter.o:	diameter.cpp diameter.h utils.h
 gtp.o:	gtp.cpp gtp.h utils.h
 	$(G++) -c -o gtp.o gtp.cpp
 
-hss.o:	diameter.h gtp.h hss.cpp hss.h mysql.h network.h packet.h s1ap.h sctp_server.h sync.h utils.h
-	$(G++) -c -o hss.o hss.cpp	
+hss.o:	diameter.h gtp.h hss.cpp hss.h mysql.h network.h packet.h s1ap.h sctp_server.h sync.h utils.h RMCMap.h
+	$(RMC1) -c -o hss.o hss.cpp $(RMC2)	
 
-hss_server.o:	diameter.h gtp.h hss.h hss_server.cpp hss_server.h mysql.h network.h packet.h s1ap.h sctp_server.h sync.h utils.h
-	$(G++) -c -o hss_server.o hss_server.cpp	
+hss_server.o:	diameter.h gtp.h hss.h hss_server.cpp hss_server.h mysql.h network.h packet.h s1ap.h sctp_server.h sync.h utils.h RMCMap.h
+	$(RMC1)  -c -o hss_server.o hss_server.cpp $(RMC2)
 
-mme.o:	diameter.h gtp.h mme.cpp mme.h network.h packet.h s1ap.h sctp_client.h sctp_server.h security.h sync.h telecom.h udp_client.h utils.h
-	$(G++) -c -o mme.o mme.cpp
+mme.o:	diameter.h gtp.h mme.cpp mme.h network.h packet.h s1ap.h sctp_client.h sctp_server.h security.h sync.h telecom.h udp_client.h utils.h RMCMap.h
+	$(RMC1) -c -o mme.o mme.cpp $(RMC2) 
+
 
 mme_server.o:	diameter.h gtp.h mme.h mme_server.cpp mme_server.h network.h packet.h s1ap.h sctp_client.h sctp_server.h security.h sync.h telecom.h udp_client.h utils.h
-	$(G++) -c -o mme_server.o mme_server.cpp	
+	$(RMC1) -c -o mme_server.o mme_server.cpp $(RMC2)
 
 mysql.o:	mysql.cpp mysql.h utils.h
 	$(G++) -c -o mysql.o mysql.cpp
@@ -42,10 +47,10 @@ packet.o:	diameter.h gtp.h packet.cpp packet.h s1ap.h utils.h
 	$(G++) -c -o packet.o packet.cpp
 
 pgw.o:	diameter.h gtp.h network.h packet.h pgw.cpp pgw.h s1ap.h sync.h udp_client.h udp_server.h utils.h
-	$(G++) -c -o pgw.o pgw.cpp
+	$(RMC1) -c -o pgw.o pgw.cpp $(RMC2)
 
 pgw_server.o:	diameter.h gtp.h network.h packet.h pgw.h pgw_server.cpp pgw_server.h s1ap.h sync.h udp_client.h udp_server.h utils.h
-	$(G++) -c -o pgw_server.o pgw_server.cpp
+	$(RMC1) -c -o pgw_server.o pgw_server.cpp $(RMC2)
 
 ran.o:	diameter.h gtp.h network.h packet.h ran.cpp ran.h s1ap.h sctp_client.h security.h sync.h telecom.h tun.h udp_client.h udp_server.h utils.h
 	$(G++) -c -o ran.o ran.cpp
@@ -65,11 +70,11 @@ sctp_server.o:	diameter.h gtp.h network.h packet.h s1ap.h sctp_server.cpp sctp_s
 security.o:	diameter.h gtp.h packet.h s1ap.h security.cpp security.h utils.h
 	$(G++) -c -o security.o security.cpp
 
-sgw.o:	diameter.h gtp.h network.h packet.h s1ap.h sgw.cpp sgw.h sync.h udp_client.h udp_server.h utils.h
-	$(G++) -c -o sgw.o sgw.cpp
+sgw.o:	diameter.h gtp.h network.h packet.h s1ap.h sgw.cpp sgw.h sync.h udp_client.h udp_server.h utils.h RMCMap.h
+	$(RMC1) -c -o sgw.o sgw.cpp $(RMC2)
 
-sgw_server.o:	diameter.h gtp.h network.h packet.h s1ap.h sgw.h sgw_server.cpp sgw_server.h sync.h udp_client.h udp_server.h utils.h
-	$(G++) -c -o sgw_server.o sgw_server.cpp
+sgw_server.o:	diameter.h gtp.h network.h packet.h s1ap.h sgw.h sgw_server.cpp sgw_server.h sync.h udp_client.h udp_server.h utils.h RMCMap.h
+	$(RMC1) -c -o sgw_server.o sgw_server.cpp $(RMC2)
 
 sink.o:	diameter.h gtp.h network.h packet.h s1ap.h sink.cpp sink.h tun.h udp_client.h udp_server.h utils.h
 	$(G++) -c -o sink.o sink.cpp
@@ -100,19 +105,19 @@ utils.o:	utils.cpp utils.h
 
 #---------Prerequisites and Recipes---------#
 
-HSS_P = diameter.o gtp.o hss.o hss_server.o mysql.o network.o packet.o s1ap.o sctp_server.o sync.o utils.o
+HSS_P = diameter.o gtp.o hss.o hss_server.o mysql.o network.o packet.o s1ap.o sctp_server.o sync.o utils.o /usr/lib/x86_64-linux-gnu/libboost_serialization.so
 HSS_R = $(G++) -o hss.out $(HSS_P) -pthread `mysql_config --cflags --libs`
 
-MME_P = diameter.o gtp.o mme.o mme_server.o network.o packet.o s1ap.o sctp_client.o sctp_server.o security.o sync.o telecom.o udp_client.o utils.o
+MME_P = diameter.o gtp.o mme.o mme_server.o network.o packet.o s1ap.o sctp_client.o sctp_server.o security.o sync.o telecom.o /usr/lib/x86_64-linux-gnu/libboost_serialization.so udp_client.o utils.o
 MME_R = $(G++) -o mme.out $(MME_P) -pthread -lcrypto
 
-PGW_P = diameter.o gtp.o network.o packet.o pgw.o pgw_server.o s1ap.o sync.o udp_client.o udp_server.o utils.o
+PGW_P = diameter.o gtp.o network.o packet.o pgw.o pgw_server.o s1ap.o sync.o udp_client.o udp_server.o utils.o /usr/lib/x86_64-linux-gnu/libboost_serialization.so
 PGW_R = $(G++) -o pgw.out $(PGW_P) -pthread
 
 RAN_P = diameter.o gtp.o network.o packet.o ran.o ran_simulator.o s1ap.o sctp_client.o security.o sync.o telecom.o tun.o udp_client.o udp_server.o utils.o
 RAN_R = $(G++) -o ransim.out $(RAN_P) -pthread -lcrypto
 
-SGW_P = diameter.o gtp.o network.o packet.o s1ap.o sgw.o sgw_server.o sync.o udp_client.o udp_server.o utils.o
+SGW_P = diameter.o gtp.o network.o packet.o s1ap.o sgw.o sgw_server.o sync.o udp_client.o udp_server.o utils.o /usr/lib/x86_64-linux-gnu/libboost_serialization.so
 SGW_R = $(G++) -o sgw.out $(SGW_P) -pthread
 
 SINK_P = diameter.o gtp.o network.o packet.o s1ap.o sink.o sink_server.o tun.o udp_client.o udp_server.o utils.o
@@ -124,19 +129,19 @@ SINK_R = $(G++) -o sink.out $(SINK_P) -pthread
 #---------------Executable files------------#
 
 hss.out:	$(HSS_P)
-	$(HSS_R)
+	$(HSS_R) $(RMC2)
 
 mme.out:	$(MME_P)
-	$(MME_R)
+	$(MME_R) $(RMC2)
 
 pgw.out:	$(PGW_P)
-	$(PGW_R)
+	$(PGW_R) $(RMC2)
 
 ransim.out:	$(RAN_P)
 	$(RAN_R)
 
 sgw.out:	$(SGW_P)
-	$(SGW_R)
+	$(SGW_R) $(RMC2)
 
 sink.out:	$(SINK_P)	
 	$(SINK_R)	
