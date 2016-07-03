@@ -1,7 +1,7 @@
 #include "hss.h"
 
 string g_hss_ip_addr = "10.129.28.20";
-string rmc_path = "tcp:host=10.129.28.101,port=11100";
+//string rmc_path = "tcp:host=10.129.28.101,port=11100";
 int g_hss_port = 6000;
 
 Hss::Hss() {
