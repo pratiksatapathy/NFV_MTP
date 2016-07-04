@@ -148,6 +148,7 @@ try {
   return rd;
 }
 
+
 template<typename KeyType, typename ValType>
 void RMCMap<KeyType, ValType>::put(KeyType const& key,ValType const& val) {
   string k=toString(key);
