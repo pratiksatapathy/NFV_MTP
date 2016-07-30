@@ -9,8 +9,10 @@
 #include "sync.h"
 #include "udp_client.h"
 #include "udp_server.h"
-#include "RMCMap.h"  //ramcloud
+
 #include "utils.h"
+
+
 
 extern string g_sgw_s11_ip_addr;
 extern string g_sgw_s1_ip_addr;
@@ -18,6 +20,7 @@ extern string g_sgw_s5_ip_addr;
 extern int g_sgw_s11_port;
 extern int g_sgw_s1_port;
 extern int g_sgw_s5_port;
+const string dssgw_path = "10.129.28.176:8090";
 
 class UeContext {
 public:
@@ -52,24 +55,48 @@ public:
 	void serialize(Archive &ar, const unsigned int version);
 	~UeContext();
 };
+class Sgw_state{
 
+
+
+public:
+
+UeContext Sgw_state_uect;
+uint64_t imsi;
+//uint32_t s11_cteid_sgw;    key for detach operation
+//uint32_t s1_uteid_ul;
+//uint32_t s5_uteid_dl;
+
+
+
+//for serializability
+	template<class Archive>
+	void serialize(Archive &ar, const unsigned int version);
+	Sgw_state(UeContext,uint64_t);
+	Sgw_state();
+	//~Mme_state();
+
+
+
+};
 class Sgw {
 private:
-/*	unordered_map<uint32_t, uint64_t> s11_id;  S11 UE identification table: s11_cteid_sgw -> imsi
-	unordered_map<uint32_t, uint64_t> s1_id;  S1 UE identification table: s1_uteid_ul -> imsi
-	unordered_map<uint32_t, uint64_t> s5_id;  S5 UE identification table: s5_uteid_dl -> imsi
-	unordered_map<uint64_t, UeContext> ue_ctx;  UE context table: imsi -> UeContext */
+	unordered_map<uint32_t, uint64_t> s11_id; // S11 UE identification table: s11_cteid_sgw -> imsi
+	unordered_map<uint32_t, uint64_t> s1_id;  //S1 UE identification table: s1_uteid_ul -> imsi
+	unordered_map<uint32_t, uint64_t> s5_id;  //S5 UE identification table: s5_uteid_dl -> imsi
+	unordered_map<uint64_t, UeContext> ue_ctx; // UE context table: imsi -> UeContext
 
-	RMCMap<uint32_t,uint64_t> *r_s11_id;
-	RMCMap<uint32_t,uint64_t> *r_s1_id;
-	RMCMap<uint32_t,uint64_t> *r_s5_id;
-	RMCMap<uint64_t,UeContext> *r_ue_ctx;
+	vector<KVStore<uint32_t,Sgw_state>> ds_sgw_state;
+	//vector<KVStore<uint32_t,uint64_t>> ds_s1_id;
+	//vector<KVStore<uint32_t,uint64_t>> ds_s5_id;
+	//vector<KVStore<uint64_t,UeContext>> ds_ue_ctx;
 
 	/* Lock parameters */
 	pthread_mutex_t s11id_mux; /* Handles s11_id */
 	pthread_mutex_t s1id_mux; /* Handles s1_id */
 	pthread_mutex_t s5id_mux; /* Handles s5_id */
 	pthread_mutex_t uectx_mux; /* Handles ue_ctx */
+	pthread_mutex_t dssgwstate_mux;
 	
 	void clrstl();
 	void update_itfid(int, uint32_t, uint64_t);
@@ -85,17 +112,18 @@ public:
 	UdpServer s5_server;
 
 	Sgw();
-	void handle_create_session(struct sockaddr_in, Packet, UdpClient&);
-	void handle_modify_bearer(struct sockaddr_in, Packet);
-	void handle_uplink_udata(Packet, UdpClient&);
-	void handle_downlink_udata(Packet, UdpClient&);
-	void handle_detach(struct sockaddr_in, Packet, UdpClient&);
+	void initialize_kvstore_clients(int );
+	void handle_create_session(struct sockaddr_in, Packet, UdpClient&,int);
+	void handle_modify_bearer(struct sockaddr_in, Packet,int);
+	void handle_uplink_udata(Packet, UdpClient&,int);
+	void handle_downlink_udata(Packet, UdpClient&,int);
+	void handle_detach(struct sockaddr_in, Packet, UdpClient&,int);
 
-	UeContext& retrive_context(uint64_t imsi);
-	void sync_context(uint64_t imsi,UeContext local_ue_ctx);
-	uint64_t retrive_s11_id(uint32_t teid);
-	uint64_t retrive_s1_id(uint32_t teid);
-	uint64_t retrive_s5_id(uint32_t teid);
+	void push_context(int ,uint64_t ,UeContext ,int );
+	void pull_context(Packet ,int );
+	void erase_context(uint32_t ,int );
+
+
 	~Sgw();
 };
 

@@ -4,7 +4,7 @@
 #include "diameter.h"
 #include "gtp.h"
 #include "hss.h"
-#include "mysql.h"
+
 #include "network.h"
 #include "packet.h"
 #include "s1ap.h"

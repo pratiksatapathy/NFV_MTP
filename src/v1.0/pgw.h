@@ -10,7 +10,7 @@
 #include "udp_client.h"
 #include "udp_server.h"
 #include "utils.h"
-#include "RMCMap.h"  //ramcloud
+
 
 
 extern string g_sgw_s5_ip_addr;

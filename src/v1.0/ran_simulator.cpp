@@ -12,7 +12,7 @@ vector<thread> g_dmon_thread;
 vector<thread> g_threads;
 thread g_rtt_thread;
 TrafficMonitor g_traf_mon;
-
+/*
 void utraffic_monitor() {
 	UdpClient sgw_s1_client;
 	
@@ -36,6 +36,7 @@ void ping(){
 	cout << cmd << endl;
 	system(cmd.c_str());
 }
+*/
 
 void simulate(int arg) {
 	CLOCK::time_point mstart_time;
@@ -65,7 +66,6 @@ void simulate(int arg) {
 		// Initial attach
 		ran.initial_attach();
 
-
 		// Authentication
 		ok = ran.authenticate();
 		if (!ok) {
@@ -93,10 +93,10 @@ void simulate(int arg) {
 			g_rtt_thread = thread(ping);
 			g_rtt_thread.detach();		
 		}
-		*/ 
+		*/
 
 		/* Data transfer */
-		ran.transfer_data(g_req_dur);
+		//ran.transfer_data(g_req_dur);
 		
 		// Detach
 		ok = ran.detach();
@@ -115,7 +115,8 @@ void simulate(int arg) {
 		g_sync.mlock(g_mux);
 		g_tot_regs++;
 		g_tot_regstime += mtime_diff_us.count();		
-		g_sync.munlock(g_mux);			
+		g_sync.munlock(g_mux);
+		//break;
 	}
 }
 
@@ -142,11 +143,11 @@ void init(char *argv[]) {
 void run() {
 	int i;
 
-	/* Tun */
+	/* Tun
 	g_traf_mon.tun.set_itf("tun1", "172.16.0.1/16");
 	g_traf_mon.tun.conn("tun1");
 
-	/* Traffic monitor server */
+	/* Traffic monitor server //*
 	TRACE(cout << "Traffic monitor server started" << endl;)
 	g_traf_mon.server.run(g_trafmon_ip_addr, g_trafmon_port);	
 
@@ -162,7 +163,7 @@ void run() {
 		g_dmon_thread[i].detach();			
 	}
 	
-	// Simulator threads
+	// Simulator threads */
 	for (i = 0; i < g_threads_count; i++) {
 		g_threads[i] = thread(simulate, i);
 	}	

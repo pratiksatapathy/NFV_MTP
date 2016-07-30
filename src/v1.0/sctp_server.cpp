@@ -32,6 +32,9 @@ void SctpServer::init_pipe_fds() {
 	pipe_fds.resize(workers_count);
 	for (i = 0; i < workers_count; i++) {
 		pipe_fds[i] = new int[2, 0];
+		//pipe_fds[i] = new int[2];
+	//	pipe_fds[i][0]=0;
+	//	pipe_fds[i][1]=0;
 		status = pipe(pipe_fds[i]);
 		g_utils.handle_type1_error(status, "Pipe error: sctpserver_initpipefds");
 	}
@@ -63,13 +66,28 @@ void SctpServer::worker_func(int worker_id) {
 	while (1) {
 		conn_fds_size = conn_fds.size();	
 		FD_ZERO(&fds);
-		FD_SET(pipe_fd, &fds); 
+	//	cout<<"pipeflag:"<<fcntl(pipe_fd, F_GETFL)<<endl;
+if(fcntl(pipe_fd, F_GETFL)>=0){
+
+	FD_SET(pipe_fd, &fds);
+}
 		for (i = 0; i < conn_fds_size; i++) {
-			FD_SET(conn_fds[i], &fds); 
+
+			//cout<<"flag:"<<fcntl(conn_fds[i], F_GETFL)<<endl;
+			if(fcntl(conn_fds[i], F_GETFL)<0){
+
+				conn_fds.erase(conn_fds.begin() + i);
+				conn_fds_size--;
+				cout<<"repairing"<<i<<endl;
+				continue;
+			}
+
+			if(conn_fds[i] > 0) FD_SET(conn_fds[i], &fds);
+			if(conn_fds[i] > max_fd) max_fd = conn_fds[i];
 		}
 		
 		status = select(max_fd + 1, &fds, NULL, NULL, NULL);
-		g_utils.handle_type1_error(status, "Select error: sctpserver_workerfunc");
+		g_utils.handle_type2_error(status, "Select error: sctpserver_workerfunc:worker_id="+to_string(worker_id)+":");
 
 		if (FD_ISSET(pipe_fd, &fds)) {
 			status = g_nw.read_sctp_pkt(pipe_fd, pkt);
@@ -81,10 +99,20 @@ void SctpServer::worker_func(int worker_id) {
 		}
 
 		for (i = 0; i < conn_fds_size; ) {
+
+			/*if (status < 0 && FD_ISSET(conn_fds[i], &fds)) {
+
+				close(conn_fds[i]);
+				conn_fds.erase(conn_fds.begin() + i);
+				conn_fds_size--;
+				max_fd = max(pipe_fd, g_utils.max_ele(conn_fds));
+					continue;}*/
+
 			status = 1;
 			if (FD_ISSET(conn_fds[i], &fds)) {
 				status = serve_client(conn_fds[i], worker_id);
 			}
+
 			if (status == 0) {
 				close(conn_fds[i]);
 				conn_fds.erase(conn_fds.begin() + i);

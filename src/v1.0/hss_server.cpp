@@ -12,15 +12,19 @@ void check_usage(int argc) {
 
 void init(char *argv[]) {
 	g_workers_count = atoi(argv[1]);
-	if (mysql_library_init(0, NULL, NULL)) {
+	/*if (mysql_library_init(0, NULL, NULL)) {
 		g_utils.handle_type1_error(-1, "mysql_library_init error: hssserver_init");
 	}
+	*/
+	g_hss.initialize_kvstore_clients(g_workers_count); //error handling
 	signal(SIGPIPE, SIG_IGN);
+
 }
+
 
 void run() {
 	/* MySQL connection */
-	g_hss.handle_mysql_conn();
+	//g_hss.handle_mysql_conn();
 
 	/* HSS server */
 	TRACE(cout << "HSS server started" << endl;)
@@ -40,13 +44,13 @@ int handle_mme(int conn_fd, int worker_id) {
 		/* Authentication info req */
 		case 1:
 			TRACE(cout << "hssserver_handlemme:" << " case 1: autn info req" << endl;)
-			g_hss.handle_autninfo_req(conn_fd, pkt);
+			g_hss.handle_autninfo_req(conn_fd, pkt,worker_id);
 			break;
 
 		/* Location update */
 		case 2:
 			TRACE(cout << "hssserver_handlemme:" << " case 2: loc update" << endl;)
-			g_hss.handle_location_update(conn_fd, pkt);
+			g_hss.handle_location_update(conn_fd, pkt,worker_id);
 			break;
 
 		/* For error handling */	
@@ -58,7 +62,7 @@ int handle_mme(int conn_fd, int worker_id) {
 }
 
 void finish() {
-	mysql_library_end();		
+	//mysql_library_end();
 }
 
 int main(int argc, char *argv[]) {

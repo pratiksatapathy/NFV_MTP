@@ -130,6 +130,7 @@ void Ran::init(int arg) {
 }
 
 void Ran::conn_mme() {
+
 	mme_client.conn(epc_addrs.mme_ip_addr, epc_addrs.mme_port);
 }
 

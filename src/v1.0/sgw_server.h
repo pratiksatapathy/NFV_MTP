@@ -23,8 +23,8 @@ extern Sgw g_sgw;
 void check_usage(int);
 void init(char**);
 void run();
-void handle_s11_traffic();
-void handle_s1_traffic();
-void handle_s5_traffic();
+void handle_s11_traffic(int);
+void handle_s1_traffic(int);
+void handle_s5_traffic(int);
 
 #endif /* SGW_SERVER_H */

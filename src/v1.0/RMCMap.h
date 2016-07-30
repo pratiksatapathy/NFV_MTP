@@ -83,7 +83,7 @@ void RMCMap<KeyType, ValType>::remove(KeyType const& key) {
 
 template<typename KeyType, typename ValType>
 RMCMap<KeyType, ValType>::RMCMap(char *conf){
-    cluster = new RamCloud(conf,"__unnamed__");  
+    cluster = new RamCloud(conf,"__unnamed__");
     t_name="test"+currentTimeMillis();
     table = cluster->createTable(t_name.c_str());
     //printf("Table created : %s  TID:%lu\n",t_name.c_str(),table);
@@ -91,7 +91,7 @@ RMCMap<KeyType, ValType>::RMCMap(char *conf){
 
 template<typename KeyType, typename ValType>
 RMCMap<KeyType, ValType>::RMCMap(char *conf,char *tablename){
-    cluster = new RamCloud(conf,"__unnamed__");  
+    cluster = new RamCloud(conf,"__unnamed__");
     t_name=*(new string(tablename));
     table = cluster->createTable(tablename);
     //printf("Table created : %s  TID:%lu\n",t_name.c_str(),table);
@@ -137,7 +137,7 @@ try {
   string s(str);
   stringstream ifs;
   ifs<<s;
-  boost::archive::text_iarchive ia(ifs); 
+  boost::archive::text_iarchive ia(ifs);
   ia >> (*val);
   rd.value = val;
   rd.valid = true;
@@ -147,7 +147,6 @@ try {
  }
   return rd;
 }
-
 
 template<typename KeyType, typename ValType>
 void RMCMap<KeyType, ValType>::put(KeyType const& key,ValType const& val) {

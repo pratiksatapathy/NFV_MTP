@@ -12,8 +12,10 @@
 #include "sync.h"
 #include "telecom.h"
 #include "udp_client.h"
-#include "RMCMap.h"  //ramcloud
+
 #include "utils.h"
+
+
 
 extern string g_trafmon_ip_addr;
 extern string g_mme_ip_addr;
@@ -30,6 +32,8 @@ extern int g_sgw_s1_port;
 extern int g_sgw_s5_port;
 extern int g_pgw_s5_port;
 extern uint64_t g_timer;
+
+const string dsmme_path = "10.129.26.223:8090";
 
 class UeContext {
 public:
@@ -100,6 +104,24 @@ public:
 
 	~UeContext();
 };
+class Mme_state{
+public:
+
+UeContext Mme_state_uect;
+uint64_t guti;
+//uint32_t Mme_state_mme_s1ap_ue_id;
+
+
+//for serializability
+	template<class Archive>
+	void serialize(Archive &ar, const unsigned int version);
+	Mme_state(UeContext,uint64_t);
+	Mme_state();
+	//~Mme_state();
+
+
+
+};
 
 class MmeIds {
 public:
@@ -119,12 +141,14 @@ class Mme {
 private:
 	MmeIds mme_ids;
 	uint64_t ue_count;
-	//unordered_map<uint32_t, uint64_t> s1mme_id; /* S1_MME UE identification table: mme_s1ap_ue_id -> guti */
-	//unordered_map<uint64_t, UeContext> ue_ctx; /* UE context table: guti -> UeContext */
+	unordered_map<uint32_t, uint64_t> s1mme_id; /* S1_MME UE identification table: mme_s1ap_ue_id -> guti */
+	unordered_map<uint64_t, UeContext> ue_ctx; /* UE context table: guti -> UeContext */
 
 
-	RMCMap<uint32_t,uint64_t> *r_s1mme_id;
-	RMCMap<uint64_t,UeContext> *r_ue_ctx;
+	vector<KVStore<uint32_t,uint64_t>> ds_s1mme_ids;
+	vector<KVStore<uint64_t,UeContext>> ds_ue_ctxs;
+	vector<KVStore<uint32_t,Mme_state>> ds_mme_state;
+
 
 	/* Lock parameters */
 	pthread_mutex_t s1mmeid_mux; /* Handles s1mme_id and ue_count */
@@ -146,18 +170,24 @@ public:
 	SctpServer server;
 
 	Mme();
-	void handle_initial_attach(int, Packet, SctpClient&);
-	bool handle_autn(int, Packet);
-	void handle_security_mode_cmd(int, Packet);
-	bool handle_security_mode_complete(int, Packet);
-	void handle_location_update(Packet, SctpClient&);
-	void handle_create_session(int, Packet, UdpClient&);
-	void handle_attach_complete(Packet);
-	void handle_modify_bearer(Packet, UdpClient&);
-	void handle_detach(int, Packet, UdpClient&);
-	UeContext& retrive_context(uint64_t guti);
-	void sync_context(uint64_t guti,UeContext local_ue_ctx);
+	void initialize_kvstore_clients(int);
+	void handle_initial_attach(int, Packet, SctpClient&,int);
+	bool handle_autn(int, Packet,int);
+	void handle_security_mode_cmd(int, Packet,int);
+	bool handle_security_mode_complete(int, Packet,int);
+	void handle_location_update(Packet, SctpClient&,int);
+	void handle_create_session(int, Packet, UdpClient&,int);
+	void handle_attach_complete(Packet,int);
+	void handle_modify_bearer(Packet, UdpClient&,int);
+	void handle_detach(int, Packet, UdpClient&,int);
+	UeContext get_context(uint64_t guti);
+
+	void push_context(uint64_t ,UeContext ,uint32_t ,int );
+	void pull_context(Packet ,int );
+	void erase_context(uint32_t,int);
+
 	~Mme();
 };
+
 
 #endif /* MME_H */

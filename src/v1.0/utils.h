@@ -43,16 +43,21 @@
 /* (C++) STL: vector */
 #include <vector>
 
+/* datastore connection */
+#include "KVStore.h"
+
+
 using namespace std;
+using namespace kvstore;
+
 
 typedef std::chrono::high_resolution_clock CLOCK;
 typedef std::chrono::microseconds MICROSECONDS;
-
-#define DEBUG_FLAG 1
-#define TRACE(x) if (DEBUG_FLAG) { x }
+#define DEBUG 0
+#define TRACE(x) if (DEBUG) { x }
 
 const int MAX_UE_COUNT = 10000;
-const string rmc_path = "tcp:host=10.129.28.101,port=11100";
+
 
 class Utils {
 public:
